@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Nueva Mascota{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-3">
+  <div>
+    <h3 class="mb-0">Mascota</h3>
+    <div class="text-muted">Registro de mascota</div>
+  </div>
+  <a class="btn btn-outline-secondary" href="{% url 'mascotas_por_cliente' cliente.id %}">Volver</a>
+</div>
+
+<form method="post" class="card shadow-sm">
+  {% csrf_token %}
+
+  <div class="card-header bg-white">
+    <div class="fw-semibold">
+      Cliente: {{ cliente.nombre }} ({{ cliente.rut }})
+    </div>
+    <div class="text-muted small">
+      Email: {{ cliente.email }} · Tel: {{ cliente.telefono }}
+    </div>
+  </div>
+
+  <div class="card-body">
+    {% if form.non_field_errors %}
+      <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    <div class="row g-3">
+      <div class="col-md-6">
+        <label class="form-label">Raza</label>
+        {{ form.raza }}
+        {% if form.raza.errors %}<div class="text-danger small">{{ form.raza.errors }}</div>{% endif %}
+      </div>
+
+      <div class="col-md-6">
+        <label class="form-label">Nombre</label>
+        {{ form.nombre }}
+        {% if form.nombre.errors %}<div class="text-danger small">{{ form.nombre.errors }}</div>{% endif %}
+      </div>
+
+      <div class="col-md-3">
+        <label class="form-label">Sexo</label>
+        {{ form.sexo }}
+        {% if form.sexo.errors %}<div class="text-danger small">{{ form.sexo.errors }}</div>{% endif %}
+      </div>
+
+      <div class="col-md-3">
+        <label class="form-label">Fecha Nacimiento</label>
+        {{ form.fechanac }}
+        {% if form.fechanac.errors %}<div class="text-danger small">{{ form.fechanac.errors }}</div>{% endif %}
+      </div>
+
+      <div class="col-md-3">
+        <label class="form-label">N° de Chip</label>
+        {{ form.chip }}
+        {% if form.chip.errors %}<div class="text-danger small">{{ form.chip.errors }}</div>{% endif %}
+      </div>
+
+    </div>
+  </div>
+
+  <div class="card-footer bg-white d-flex justify-content-end gap-2">
+    <a class="btn btn-outline-secondary" href="{% url 'mascotas_por_cliente' cliente.id %}">
+      Volver a Mascotas
+    </a>
+    <button type="submit" class="btn btn-success">Guardar</button>
+  </div>
+</form>
+{% endblock %}

@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Atenciones{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-3">
+  <div>
+    <h2 class="mb-0">Atenciones</h2>
+    <div class="text-muted">
+      Cliente: {{ cliente.nombre }} ({{ cliente.rut }})
+    </div>
+  </div>
+
+  <div class="d-flex gap-2">
+    <a class="btn btn-outline-secondary" href="{% url 'cliente_list' %}">Volver a Clientes</a>
+    <a class="btn btn-primary" href="{% url 'registrar_atencion' cliente.id %}">Registrar Atención</a>
+    <a class="btn btn-outline-primary" href="{% url 'citas_por_cliente' cliente.id %}">Ver Citas</a>
+  </div>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-body">
+    {% if atenciones %}
+      <div class="table-responsive">
+        <table class="table table-striped table-hover align-middle">
+          <thead>
+            <tr>
+              <th style="white-space:nowrap;">Fecha</th>
+              <th>Mascota</th>
+              <th>Especie / Raza</th>
+              <th>Evolución</th>
+              <th class="text-end" style="white-space:nowrap;">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for a in atenciones %}
+              <tr>
+                <td style="white-space:nowrap;">{{ a.fechaatencion }}</td>
+                <td>{{ a.mascota.nombre }}</td>
+                <td style="white-space:nowrap;">
+                  {{ a.mascota.raza.especie.nombre }} / {{ a.mascota.raza.nombre }}
+                </td>
+                <td style="max-width:520px;">
+                  {{ a.evolucion|default:""|truncatechars:160 }}
+                </td>
+                <td class="text-end" style="white-space:nowrap;">
+                  <a class="btn btn-sm btn-outline-secondary"
+                     href="{% url 'atencion_detalle' a.id %}">
+                    Ver Detalle
+                  </a>
+
+                  <a class="btn btn-sm btn-outline-primary"
+                     href="{% url 'atencion_update' cliente.id a.id %}" title="Editar" aria-label="Editar"><i class="bi bi-pencil"></i>
+                  </a>
+
+                  <form method="post" action="{% url 'atencion_delete' cliente.id a.id %}" class="d-inline"
+                    onsubmit="return confirm('¿Eliminar esta atención y su detalle?');">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-outline-danger">Eliminar</button>
+                  </form>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="alert alert-info mb-0">
+        Este cliente aún no tiene atenciones registradas.
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

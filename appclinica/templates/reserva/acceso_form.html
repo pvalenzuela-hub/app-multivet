@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Reserva de Hora{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-lg-7 col-xl-6">
+    <div class="text-center mb-4">
+      <div class="brand d-inline-flex text-start">
+        <img src="{% static 'img/vetnex-logo.svg' %}" alt="Vetnex" class="brand-logo">
+        <div class="lh-1">
+          <div class="brand-title">
+            <span class="brand-pet">Pet</span><span class="brand-salud">Salud</span>
+          </div>
+          <div class="brand-sub">CLÍNICA VETERINARIA</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="text-center mb-4">
+      <h2 class="mb-1">Reserva de Hora</h2>
+      <div class="text-muted">Ingrese su RUT y el email registrado para continuar</div>
+    </div>
+
+    <form method="post" class="card shadow-sm">
+      {% csrf_token %}
+      <div class="card-body p-4">
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        {% for field in form %}
+          <div class="mb-3">
+            <label class="form-label">{{ field.label }}</label>
+            {{ field }}
+            {% if field.errors %}<div class="text-danger small mt-1">{{ field.errors }}</div>{% endif %}
+            {% if field.name == "rut" %}<div class="form-text">Use el formato 12345678-9. El guion es obligatorio.</div>{% endif %}
+          </div>
+        {% endfor %}
+
+        <div class="alert alert-secondary mb-0">
+          Por seguridad, el email debe coincidir con el registrado en la ficha del cliente.
+        </div>
+
+        <p class="text-muted small mt-3 mb-0">
+          Si usted no está registrado ingrese su RUT y su email y el sistema le permitirá ingresar sus datos para registrarse y realizar la reserva.
+        </p>
+        {% if show_register and registro_initial %}
+          <div class="alert alert-info mt-3 mb-0">
+            Si aun no esta registrado, puede crear su ficha y la de su mascota para continuar con la reserva.
+          </div>
+        {% endif %}
+      </div>
+      <div class="card-footer d-flex justify-content-end gap-2">
+        {% if show_register and registro_initial %}
+          <button class="btn btn-outline-secondary" type="submit">Volver a intentar</button>
+          <a class="btn btn-primary" href="{% url 'reserva_publica_registro' %}">Registrarme</a>
+        {% else %}
+          <button class="btn btn-primary" type="submit">Continuar</button>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

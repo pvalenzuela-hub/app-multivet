@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Nueva Cita{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-3">
+  <div>
+    <h2 class="mb-0">Nueva Cita</h2>
+    <div class="text-muted">Cliente: {{ cliente.nombre }} ({{ cliente.rut }})</div>
+  </div>
+  <a class="btn btn-outline-secondary" href="{% url 'citas_por_cliente' cliente.id %}">Volver</a>
+</div>
+
+
+{% if form.errors or form.non_field_errors %}
+  <div class="alert alert-danger">
+    <strong>No se pudo guardar.</strong>
+    <div class="small mt-1">Revisa los campos marcados.</div>
+  </div>
+{% endif %}
+
+<form method="post" class="card shadow-sm">
+  {% csrf_token %}
+  <div class="card-body">
+
+    {# Errores generales (si la vista agrega non_field_errors) #}
+    {% if form.non_field_errors %}
+      <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    <div class="row g-3">
+      <div class="col-md-6">
+        <label class="form-label">Mascota</label>
+
+        <select name="mascota_id" class="form-select" required>
+          <option value="">-- Seleccione --</option>
+          {% for m in mascotas %}
+            <option value="{{ m.id }}"
+              {% if request.POST.mascota_id == m.id|stringformat:"s" %}selected{% endif %}>
+              {{ m.nombre }}
+            </option>
+          {% endfor %}
+        </select>
+
+        {% if request.method == "POST" and request.POST.mascota_id == "" %}
+          <div class="text-danger small mt-1">Debe seleccionar una mascota.</div>
+        {% endif %}
+      </div>
+
+      <div class="col-md-3">
+        <label class="form-label">Fecha</label>
+        {{ form.fecha }}
+        {% if form.fecha.errors %}<div class="text-danger small mt-1">{{ form.fecha.errors }}</div>{% endif %}
+      </div>
+
+      <div class="col-md-3">
+        <label class="form-label">Control</label>
+        {{ form.control }}
+        {% if form.control.errors %}<div class="text-danger small mt-1">{{ form.control.errors }}</div>{% endif %}
+      </div>
+
+      <div class="col-12">
+        <label class="form-label">Observación</label>
+        {{ form.observacion }}
+        {% if form.observacion.errors %}<div class="text-danger small mt-1">{{ form.observacion.errors }}</div>{% endif %}
+      </div>
+
+      <div class="col-12">
+        <div class="alert alert-secondary mb-0">
+          Estado: <strong>se asigna automáticamente</strong> (por defecto).
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="card-footer d-flex justify-content-end gap-2">
+    <button type="submit" class="btn btn-success">Guardar Cita</button>
+  </div>
+</form>
+{% endblock %}

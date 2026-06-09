@@ -1,0 +1,290 @@
+<!-- base.html-->
+{% load static %}
+
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>{% block title %}Veterinaria{% endblock %}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+
+
+  <style>
+    .sidebar { width: 260px; }
+    .sidebar .nav-link.active {
+      background: rgba(13,110,253,.12);
+      color: #0d6efd;
+      border-radius: .5rem;
+      font-weight: 600;
+    }
+    .content-wrap { min-height: 100vh; }
+
+
+    /* ===== Brand (logo + texto) ===== */
+    .brand{
+      /* variables por defecto (login o tamaño “normal”) */
+      --brand-logo-h: 46px;
+      --brand-title-size: 34px;
+      --brand-sub-size: 12px;
+      --brand-sub-border: 2px;
+
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      max-width: 100%;
+    }
+
+    .brand-logo{
+      height: var(--brand-logo-h);
+      width: auto;
+    }
+
+    .brand-title{
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+      font-weight: 300;
+      font-size: var(--brand-title-size);
+      letter-spacing: .2px;
+      line-height: 1;
+      margin: 0;
+    }
+
+    .brand-pet{ color:#6c757d; }
+    .brand-salud{ color:#6c757d; } /* o azul si quieres: #0d6efd */
+
+    .brand-sub{
+      margin-top: 2px;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+      font-weight: 700;
+
+      /* clave: evitar quiebre */
+      white-space: nowrap;
+
+      /* ayuda a que quepa en el sidebar */
+      font-size: 11px;          /* o usa clamp abajo */
+      letter-spacing: .6px;     /* antes 1px */
+      line-height: 1;
+
+      color:#0d6efd;
+      text-transform: uppercase;
+      display: inline-block;
+      padding-bottom: 3px;
+      border-bottom: 2px solid #0d6efd;
+    }
+
+    /* opcional (mejor): tamaño responsive */
+    @media (max-width: 1200px){
+      .brand-sub{ font-size: 10.5px; }
+    }
+
+
+    /* Variantes */
+    .brand--sidebar{
+      --brand-logo-h: 42px;
+      --brand-title-size: 22px;
+      --brand-sub-size: 10px;
+      --brand-sub-border: 2px;
+    }
+
+    .brand--topbar{
+      --brand-logo-h: 38px;
+      --brand-title-size: 20px;
+      --brand-sub-size: 10px;
+      --brand-sub-border: 2px;
+    }
+
+    /* En login la queremos más grande */
+    .brand--login{
+      --brand-logo-h: 64px;
+      --brand-title-size: 42px;
+      --brand-sub-size: 12px;
+      --brand-sub-border: 3px;
+    }
+  </style>
+
+  {% block extra_css %}{% endblock %}
+</head>
+
+<body class="bg-light">
+
+{% if request.user.is_authenticated and not hide_sidebar %}
+
+  <!-- Topbar móvil -->
+  <nav class="navbar navbar-dark bg-dark d-lg-none">
+    <div class="container-fluid">
+      <button class="btn btn-outline-light" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasSidebar">
+        Menú
+      </button>
+
+      <div class="brand brand--topbar">
+        {% if veterinaria_activa and veterinaria_activa.logo %}
+          <img src="{{ veterinaria_activa.logo }}" alt="{{ veterinaria_activa.nombre }}" class="brand-logo">
+        {% else %}
+          <img src="{% static 'img/vetnex-logo.svg' %}" alt="Vetnex" class="brand-logo">
+        {% endif %}
+      </div>
+
+      <a class="btn btn-outline-light" href="{% url 'logout' %}">Salir</a>
+    </div>
+  </nav>
+
+  <div class="d-flex">
+    <!-- Sidebar escritorio -->
+    <aside class="sidebar d-none d-lg-flex flex-column bg-white border-end p-3 content-wrap">
+
+      <div class="brand brand--sidebar mb-3">
+        {% if veterinaria_activa and veterinaria_activa.logo %}
+          <img src="{{ veterinaria_activa.logo }}" alt="{{ veterinaria_activa.nombre }}" class="brand-logo">
+        {% else %}
+          <img src="{% static 'img/vetnex-logo.svg' %}" alt="Vetnex" class="brand-logo">
+        {% endif %}
+      </div>
+
+      <div class="small text-muted mb-2">Gestión</div>
+      <nav class="nav nav-pills flex-column gap-1">
+        <a class="nav-link {% if request.resolver_match.url_name == 'cliente_list' %}active{% endif %}" href="{% url 'cliente_list' %}">
+          Clientes
+        </a>
+        <a class="nav-link {% if request.resolver_match.url_name == 'cliente_create' %}active{% endif %}" href="{% url 'cliente_create' %}">
+          Nuevo Cliente
+        </a>
+        <a class="nav-link {% if request.resolver_match.url_name == 'ficha_clinica_buscar' %}active{% endif %}" href="{% url 'ficha_clinica_buscar' %}">
+          Ficha Clínica
+        </a>
+      </nav>
+      <nav class="nav nav-pills flex-column gap-1">
+        <a class="nav-link {% if request.resolver_match.url_name == 'dashboard_panel' %}active{% endif %}"
+          href="{% url 'dashboard_panel' %}">
+          Panel
+        </a>
+        <a class="nav-link" href="{% url 'citas_pendientes_filtrado' %}">
+          <i class="bi bi-calendar2-check"></i> Citas Pendientes
+        </a>
+        <a class="nav-link {% if request.resolver_match.url_name == 'reserva_list' %}active{% endif %}"
+          href="{% url 'reserva_list' %}">
+          Reservas
+        </a>
+        <a class="nav-link {% if request.resolver_match.url_name == 'promocion_list' %}active{% endif %}"
+          href="{% url 'promocion_list' %}">
+          Promociones
+        </a>
+      </nav>
+
+      <hr>
+      <div class="small text-muted mb-2">Agenda</div>
+      <nav class="nav nav-pills flex-column gap-1">
+        <a class="nav-link {% if request.resolver_match.url_name == 'agendaevento_list' %}active{% endif %}" href="{% url 'agendaevento_list' %}">Eventos Reservables</a>
+        <a class="nav-link {% if request.resolver_match.url_name == 'agendabloqueo_list' %}active{% endif %}" href="{% url 'agendabloqueo_list' %}">Bloqueos</a>
+      </nav>
+      <hr>
+      <div class="small text-muted mb-2">Tablas</div>
+      <nav class="nav nav-pills flex-column gap-1">
+        <a class="nav-link" href="{% url 'especie_list' %}">Especie</a>
+        <a class="nav-link" href="{% url 'raza_list' %}">Raza</a>
+        <a class="nav-link" href="{% url 'prestacion_list' %}">Prestaciones</a>
+        <a class="nav-link" href="{% url 'control_list' %}">Controles</a>
+        {% if es_administrador %}
+          <a class="nav-link {% if request.resolver_match.url_name == 'veterinaria_list' %}active{% endif %}" href="{% url 'veterinaria_list' %}">Datos Veterinaria</a>
+        {% endif %}
+      </nav>
+      {% if es_superusuario %}
+        <hr>
+        <div class="small text-muted mb-2">Veterinaria activa</div>
+        <form method="post" action="{% url 'veterinaria_set_active' %}" class="mb-3">
+          {% csrf_token %}
+          <input type="hidden" name="next" value="{{ request.get_full_path }}">
+          <select class="form-select form-select-sm mb-2" name="veterinaria_id">
+            {% for vet in veterinarias_disponibles %}
+              <option value="{{ vet.id }}" {% if veterinaria_activa and vet.id == veterinaria_activa.id %}selected{% endif %}>{{ vet.nombre }}</option>
+            {% empty %}
+              <option value="">Sin veterinarias</option>
+            {% endfor %}
+          </select>
+          <button class="btn btn-sm btn-primary w-100" type="submit">Usar</button>
+        </form>
+        <hr>
+      {% endif %}
+      <div class="small text-muted mb-2">Sesión</div>
+      <nav class="nav nav-pills flex-column gap-1">
+        <form method="post" action="{% url 'logout' %}" class="mt-2">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-link nav-link p-0 text-start">
+            Salir
+          </button>
+        </form>
+      </nav>
+
+      <div class="mt-auto pt-3 small text-muted">
+        Usuario: <b>{{ request.user.first_name }} {{ request.user.last_name }}</b>
+      </div>
+    </aside>
+
+    <!-- Sidebar móvil -->
+    <div class="offcanvas offcanvas-start" tabindex="-1" id="offcanvasSidebar">
+      <div class="offcanvas-header">
+        <h5 class="offcanvas-title">Veterinaria</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+      </div>
+      <div class="offcanvas-body">
+        <div class="nav nav-pills flex-column gap-1">
+          <a class="nav-link {% if request.resolver_match.url_name == 'cliente_list' %}active{% endif %}" href="{% url 'cliente_list' %}">Clientes</a>
+          <a class="nav-link {% if request.resolver_match.url_name == 'cliente_create' %}active{% endif %}" href="{% url 'cliente_create' %}">Nuevo Cliente</a>
+          <a class="nav-link {% if request.resolver_match.url_name == 'ficha_clinica_buscar' %}active{% endif %}" href="{% url 'ficha_clinica_buscar' %}">Ficha Clínica</a>
+          <a class="nav-link {% if request.resolver_match.url_name == 'reserva_list' %}active{% endif %}" href="{% url 'reserva_list' %}">Reservas</a>
+          <a class="nav-link {% if request.resolver_match.url_name == 'promocion_list' %}active{% endif %}" href="{% url 'promocion_list' %}">Promociones</a>
+          <a class="nav-link {% if request.resolver_match.url_name == 'agendaevento_list' %}active{% endif %}" href="{% url 'agendaevento_list' %}">Eventos Reservables</a>
+          <a class="nav-link {% if request.resolver_match.url_name == 'agendabloqueo_list' %}active{% endif %}" href="{% url 'agendabloqueo_list' %}">Bloqueos</a>
+          {% if es_administrador %}
+            <a class="nav-link {% if request.resolver_match.url_name == 'veterinaria_list' %}active{% endif %}" href="{% url 'veterinaria_list' %}">Veterinarias</a>
+          {% endif %}
+          {% if es_superusuario %}
+            <hr>
+            <div class="small text-muted mb-2">Veterinaria activa</div>
+            <form method="post" action="{% url 'veterinaria_set_active' %}" class="mb-2">
+              {% csrf_token %}
+              <input type="hidden" name="next" value="{{ request.get_full_path }}">
+              <select class="form-select form-select-sm mb-2" name="veterinaria_id">
+                {% for vet in veterinarias_disponibles %}
+                  <option value="{{ vet.id }}" {% if veterinaria_activa and vet.id == veterinaria_activa.id %}selected{% endif %}>{{ vet.nombre }}</option>
+                {% empty %}
+                  <option value="">Sin veterinarias</option>
+                {% endfor %}
+              </select>
+              <button class="btn btn-sm btn-primary w-100" type="submit">Usar</button>
+            </form>
+          {% endif %}
+          <a class="nav-link" href="{% url 'logout' %}">Salir</a>
+        </div>
+      </div>
+    </div>
+
+{% endif %}
+
+<!-- Main (único) -->
+<main class="{% if request.user.is_authenticated and not hide_sidebar %}flex-grow-1 p-3 p-lg-4{% else %}container py-5{% endif %}">
+  {% if messages %}
+    {% for message in messages %}
+      <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  {% block content %}{% endblock %}
+</main>
+
+{% if request.user.is_authenticated and not hide_sidebar %}
+  </div> <!-- cierra d-flex -->
+{% endif %}
+
+<!-- Cargamos jQuery globalmente para poder usarlo en cualquier vista -->
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+
+<!-- Bootstrap bundle (incluye Popper) -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+{% block extra_js %}{% endblock %}
+</body>
+</html>

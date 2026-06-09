@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}{% if modo == "update" %}Editar Cliente{% else %}Nuevo Cliente{% endif %}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h3 class="mb-0">{% if modo == "update" %}Editar Cliente{% else %}Nuevo Cliente{% endif %}</h3>
+    <div class="text-muted">Complete los datos del cliente</div>
+  </div>
+</div>
+
+<form method="post" class="card shadow-sm">
+  {% csrf_token %}
+  <div class="card-body">
+    {% if form.non_field_errors %}
+      <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    <div class="row g-3">
+      <div class="col-md-3">
+        <label class="form-label">RUT</label>
+        {{ form.rut }}
+        {% if form.rut.errors %}<div class="text-danger small">{{ form.rut.errors }}</div>{% endif %}
+      </div>
+
+      <div class="col-md-5">
+        <label class="form-label">Nombre</label>
+        {{ form.nombre }}
+        {% if form.nombre.errors %}<div class="text-danger small">{{ form.nombre.errors }}</div>{% endif %}
+      </div>
+
+      <div class="col-md-4">
+        <label class="form-label">Email</label>
+        {{ form.email }}
+        {% if form.email.errors %}<div class="text-danger small">{{ form.email.errors }}</div>{% endif %}
+      </div>
+
+      <div class="col-md-3">
+        <label class="form-label">Teléfono</label>
+        {{ form.telefono }}
+      </div>
+
+      <div class="col-md-6">
+        <label class="form-label">Dirección</label>
+        {{ form.direccion }}
+      </div>
+
+      <div class="col-md-3">
+        <label class="form-label">Comuna</label>
+        {{ form.comuna }}
+      </div>
+
+      {{ form.origen }}
+      {% if modo == "update" %}
+      <div class="col-md-3">
+        <label class="form-label">Origen</label>
+        {{ form.origen }}
+        {% if form.origen.errors %}<div class="text-danger small">{{ form.origen.errors }}</div>{% endif %}
+        <div class="form-text">Este campo es solo lectura en edicion.</div>
+      </div>
+      {% endif %}
+
+      <div class="col-md-4">
+        <label class="form-label">Plan de Salud</label>
+        {{ form.plansalud }}
+      </div>
+
+      <div class="col-md-3">
+        <label class="form-label">Fecha Inicio Plan de Salud</label>
+        {{ form.fechaplansalud }}
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Fecha Término Plan de Salud</label>
+        {{ form.fechaterminoplan }}
+      </div>
+
+    </div>
+  </div>
+
+  <div class="card-footer d-flex justify-content-end gap-2">
+    <a class="btn btn-outline-secondary" href="{% url 'cliente_list' %}">Cancelar</a>
+    <button type="submit" class="btn btn-success">Guardar</button>
+  </div>
+</form>
+{% endblock %}

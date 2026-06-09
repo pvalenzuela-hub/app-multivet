@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}{{ title|default:"Veterinaria" }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-3">
+  <div>
+    <h2 class="mb-0">{{ title|default:"Veterinaria" }}</h2>
+    <div class="text-muted">Datos utilizados para la configuracion de la veterinaria</div>
+  </div>
+  <a class="btn btn-outline-secondary" href="{% url back_url %}">Volver</a>
+</div>
+<form method="post" enctype="multipart/form-data" class="card shadow-sm">
+  {% csrf_token %}
+  <div class="card-body">
+    {% for field in form %}
+      <div class="mb-3">
+        <label class="form-label">{{ field.label }}</label>
+        {{ field }}
+        {% if field.errors %}<div class="text-danger small">{{ field.errors }}</div>{% endif %}
+      </div>
+    {% endfor %}
+  </div>
+  <div class="card-footer text-end">
+    <button class="btn btn-primary" type="submit">Guardar Cambios</button>
+  </div>
+</form>
+{% endblock %}

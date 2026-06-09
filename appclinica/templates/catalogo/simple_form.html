@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-3">
+  <div>
+    <h2 class="mb-0">{{ title }}</h2>
+    <div class="text-muted">Formulario</div>
+  </div>
+  {% if back_href %}
+    <a class="btn btn-outline-secondary" href="{{ back_href }}">Volver</a>
+  {% else %}
+    <a class="btn btn-outline-secondary" href="{% url back_url %}">Volver</a>
+  {% endif %}
+</div>
+
+<form method="post" class="card shadow-sm">
+  {% csrf_token %}
+  <div class="card-body">
+    {{ form.non_field_errors }}
+    {% for field in form %}
+      <div class="mb-3">
+        <label class="form-label">{{ field.label }}</label>
+        {{ field }}
+        {% if field.errors %}<div class="text-danger small">{{ field.errors }}</div>{% endif %}
+      </div>
+    {% endfor %}
+  </div>
+  <div class="card-footer d-flex justify-content-end gap-2">
+    <button type="submit" class="btn btn-success">Guardar</button>
+  </div>
+</form>
+{% endblock %}

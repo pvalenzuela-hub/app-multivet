@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Cambiar Estado{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-3">
+  <div>
+    <h2 class="mb-0">Cambiar Estado de Cita</h2>
+    <div class="text-muted">
+      Cliente: {{ cliente.nombre }} ({{ cliente.rut }})<br>
+      Mascota: {{ cita.mascota.nombre }} — {{ cita.control.nombre }} — {{ cita.fecha|date:"d/m/Y" }}
+    </div>
+  </div>
+  <a class="btn btn-outline-secondary" href="{% url 'citas_por_cliente' cliente.id %}">Volver</a>
+</div>
+
+<form method="post" class="card shadow-sm">
+  {% csrf_token %}
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-md-6">
+        <label class="form-label">Estado</label>
+        {{ form.estado }}
+        {% if form.estado.errors %}<div class="text-danger small">{{ form.estado.errors }}</div>{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="card-footer d-flex justify-content-end gap-2">
+    <button type="submit" class="btn btn-success">Guardar</button>
+  </div>
+</form>
+{% endblock %}

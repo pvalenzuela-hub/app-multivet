@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+{% block title %}Clientes{% endblock %}
+
+{% block content %}
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <h3 class="mb-0">Clientes</h3>
+      <div class="text-muted">Búsqueda y gestión</div>
+    </div>
+  </div>
+
+  <form method="get" class="card shadow-sm mb-3">
+    <div class="card-body">
+      <div class="row g-3 align-items-end">
+        <!-- Botones Buscar y Limpiar al inicio, juntos -->
+        <div class="col-auto d-flex gap-2">
+          <button class="btn btn-primary" type="submit">Buscar</button>
+          <a class="btn btn-outline-secondary" href="{% url 'cliente_list' %}">Limpiar</a>
+        </div>
+
+        <!-- Resto de filtros (sin eliminar ninguno) -->
+        <div class="col-12 col-lg-4">
+          <label class="form-label">Búsqueda general</label>
+          <input class="form-control" name="q" value="{{ filters.q }}"
+                 placeholder="RUT, nombre, email, teléfono, dirección, plan salud o comuna">
+        </div>
+
+        <div class="col-6 col-lg-2">
+          <label class="form-label">RUT</label>
+          <input class="form-control" name="rut" value="{{ filters.rut }}">
+        </div>
+        <div class="col-6 col-lg-2">
+          <label class="form-label">Nombre</label>
+          <input class="form-control" name="nombre" value="{{ filters.nombre }}">
+        </div>
+        <div class="col-6 col-lg-2">
+          <label class="form-label">Email</label>
+          <input class="form-control" name="email" value="{{ filters.email }}">
+        </div>
+        <div class="col-6 col-lg-2">
+          <label class="form-label">Teléfono</label>
+          <input class="form-control" name="telefono" value="{{ filters.telefono }}">
+        </div>
+        <div class="col-12 col-lg-4">
+          <label class="form-label">Dirección</label>
+          <input class="form-control" name="direccion" value="{{ filters.direccion }}">
+        </div>
+        <div class="col-12 col-lg-3">
+          <label class="form-label">Plan de Salud</label>
+          <input class="form-control" name="plansalud" value="{{ filters.plansalud }}">
+        </div>
+        <div class="col-12 col-lg-3">
+          <label class="form-label">Comuna</label>
+          <select class="form-select" name="comuna">
+            <option value="">-- Todas --</option>
+            {% for co in comunas %}
+              <option value="{{ co.id }}" {% if filters.comuna|stringformat:"s" == co.id|stringformat:"s" %}selected{% endif %}>
+                {{ co.nombre }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-12 col-lg-2">
+          <label class="form-label">Origen</label>
+          <select class="form-select" name="origen">
+            <option value="">-- Todos --</option>
+            <option value="sistema" {% if filters.origen == "sistema" %}selected{% endif %}>Sistema</option>
+            <option value="web" {% if filters.origen == "web" %}selected{% endif %}>Web</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </form>
+
+  <div class="card shadow-sm">
+    <div class="card-body">
+      {% if clientes %}
+        <div class="table-responsive">
+          <table class="table table-striped table-hover align-middle">
+            <thead>
+              <tr>
+                <th>RUT</th>
+                <th>Cliente</th>
+                <th>Mascotas</th>
+                <th>Email</th>
+                <th>Teléfono</th>
+                <th>Comuna</th>
+                <th>Origen</th>
+                <th class="text-end">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for c in clientes %}
+              <tr>
+                <td style="white-space:nowrap;">{{ c.rut }}</td>
+                <td>{{ c.nombre }}</td>
+                <td style="max-width:260px;">{{ c.mascotas_nombres|default:"" }}</td>
+                <td>{{ c.email }}</td>
+                <td>{{ c.telefono }}</td>
+                <td>{{ c.comuna.nombre }}</td>
+                <td>{{ c.get_origen_display }}</td>
+                <td class="text-end" style="white-space:nowrap;">
+                  <!-- Ver Mascotas: icono de ojo (puedes importar Font Awesome y usar fa-paw si prefieres) -->
+                  <a class="btn btn-sm btn-outline-primary"
+                     href="{% url 'mascotas_por_cliente' c.id %}"
+                     title="Ver Mascotas" aria-label="Ver Mascotas">
+                    <i class="bi bi-eye"></i>
+                  </a>
+                  <!-- Registrar atención -->
+                  <a href="{% url 'registrar_atencion' c.id %}"
+                     class="btn btn-sm btn-success"
+                     title="Registrar Atención" aria-label="Registrar Atención">
+                    <i class="bi bi-clipboard-plus"></i>
+                  </a>
+                  <!-- Atenciones -->
+                  <a class="btn btn-sm btn-outline-primary"
+                     href="{% url 'atenciones_por_cliente' c.id %}"
+                     title="Atenciones" aria-label="Atenciones">
+                    <i class="bi bi-clipboard-check"></i>
+                  </a>
+                  <!-- Citas -->
+                  <a class="btn btn-sm btn-outline-primary"
+                     href="{% url 'citas_por_cliente' c.id %}"
+                     title="Citas" aria-label="Citas">
+                    <i class="bi bi-calendar2-check"></i>
+                  </a>
+                  <!-- Editar -->
+                  <a class="btn btn-sm btn-outline-secondary"
+                     href="{% url 'cliente_update' c.id %}"
+                     title="Editar" aria-label="Editar">
+                    <i class="bi bi-pencil"></i>
+                  </a>
+                  <!-- Nueva Mascota -->
+                  <a href="{% url 'mascota_create_cliente' c.id %}"
+                     class="btn btn-sm btn-primary"
+                     title="Nueva Mascota" aria-label="Nueva Mascota">
+                    <i class="bi bi-plus-lg"></i>
+                  </a>
+                  <!-- Ver Ficha -->
+                  <a class="btn btn-sm btn-outline-dark"
+                     href="{% url 'cliente_detail' c.id %}"
+                     title="Ver Ficha" aria-label="Ver Ficha">
+                    <i class="bi bi-file-earmark-text"></i>
+                  </a>
+                  <!-- Eliminar -->
+                  <form method="post" action="{% url 'cliente_delete' c.id %}" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit"
+                            class="btn btn-sm btn-outline-danger"
+                            title="Eliminar" aria-label="Eliminar"
+                            onclick="return confirm('¿Eliminar Cliente? Esta acción no se puede deshacer.');">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </form>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Paginación (sin cambios) -->
+        {% if page_obj and page_obj.paginator.num_pages > 1 %}
+          <nav aria-label="Paginación de clientes" class="mt-3">
+            <ul class="pagination justify-content-center mb-0">
+              {% if page_obj.has_previous %}
+                <li class="page-item">
+                  <a class="page-link"
+                     href="?page={{ page_obj.previous_page_number }}{% if querystring %}&{{ querystring }}{% endif %}">
+                    Anterior
+                  </a>
+                </li>
+              {% else %}
+                <li class="page-item disabled"><span class="page-link">Anterior</span></li>
+              {% endif %}
+              {% for num in page_obj.paginator.page_range %}
+                {% if num == page_obj.number %}
+                  <li class="page-item active" aria-current="page">
+                    <span class="page-link">{{ num }}</span>
+                  </li>
+                {% elif num >= page_obj.number|add:-3 and num <= page_obj.number|add:3 %}
+                  <li class="page-item">
+                    <a class="page-link"
+                       href="?page={{ num }}{% if querystring %}&{{ querystring }}{% endif %}">
+                      {{ num }}
+                    </a>
+                  </li>
+                {% endif %}
+              {% endfor %}
+              {% if page_obj.has_next %}
+                <li class="page-item">
+                  <a class="page-link"
+                     href="?page={{ page_obj.next_page_number }}{% if querystring %}&{{ querystring }}{% endif %}">
+                    Siguiente
+                  </a>
+                </li>
+              {% else %}
+                <li class="page-item disabled"><span class="page-link">Siguiente</span></li>
+              {% endif %}
+            </ul>
+          </nav>
+        {% endif %}
+      {% else %}
+        <div class="alert alert-info mb-0">No hay clientes para los filtros aplicados.</div>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

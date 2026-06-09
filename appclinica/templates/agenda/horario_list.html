@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Horarios{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-3">
+  <div>
+    <h2 class="mb-0">Horarios del Evento</h2>
+    <div class="text-muted">{{ evento.nombre }}</div>
+  </div>
+  <div class="d-flex gap-2">
+    <a class="btn btn-outline-secondary" href="{% url 'agendaevento_list' %}">Volver</a>
+    <a class="btn btn-success" href="{% url 'agendaeventohorario_create' evento.id %}">+ Nuevo Horario</a>
+  </div>
+</div>
+
+{% if evento.descripcion %}
+  <div class="alert alert-secondary">{{ evento.descripcion }}</div>
+{% endif %}
+
+<div class="card shadow-sm">
+  <div class="card-body">
+    {% if items %}
+      <div class="table-responsive">
+        <table class="table table-striped table-hover align-middle mb-0">
+          <thead>
+            <tr>
+              <th>Día</th>
+              <th>Desde</th>
+              <th>Hasta</th>
+              <th>Estado</th>
+              <th class="text-end">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for x in items %}
+            <tr>
+              <td>{{ x.get_dia_semana_display }}</td>
+              <td>{{ x.hora_inicio|time:"H:i" }}</td>
+              <td>{{ x.hora_fin|time:"H:i" }}</td>
+              <td>
+                {% if x.activo %}
+                  <span class="badge text-bg-success">Activo</span>
+                {% else %}
+                  <span class="badge text-bg-secondary">Inactivo</span>
+                {% endif %}
+              </td>
+              <td class="text-end" style="white-space:nowrap;">
+                <a class="btn btn-sm btn-outline-secondary" href="{% url 'agendaeventohorario_update' evento.id x.id %}">Editar</a>
+                <a class="btn btn-sm btn-outline-danger" href="{% url 'agendaeventohorario_delete' evento.id x.id %}">Eliminar</a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="alert alert-info mb-0">Este evento todavía no tiene horarios configurados.</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Ficha Clínica{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-3">
+  <div>
+    <h2 class="mb-0">Ficha Clínica</h2>
+    <div class="text-muted">Buscar por RUT del cliente</div>
+  </div>
+  <a class="btn btn-outline-secondary" href="{% url 'cliente_list' %}">Volver</a>
+</div>
+
+<form method="get" class="card shadow-sm mb-3">
+  <div class="card-body">
+    <div class="row g-2 align-items-end">
+      <div class="col-12 col-md-4">
+        <label class="form-label">RUT Cliente</label>
+        <input class="form-control" name="rut" value="{{ rut }}" placeholder="12345678-9">
+      </div>
+      <div class="col-12 col-md-2 d-grid">
+        <button class="btn btn-primary" type="submit">Buscar</button>
+      </div>
+      <div class="col-12 col-md-2 d-grid">
+        <a class="btn btn-outline-secondary" href="{% url 'ficha_clinica_buscar' %}">Limpiar</a>
+      </div>
+    </div>
+  </div>
+</form>
+
+{% if cliente %}
+  <div class="card shadow-sm mb-3">
+    <div class="card-body">
+      <div class="fw-semibold">Cliente: {{ cliente.nombre }} ({{ cliente.rut }})</div>
+      <div class="text-muted small">
+        Email: {{ cliente.email }} · Tel: {{ cliente.telefono }} · Comuna: {{ cliente.comuna.nombre }}
+      </div>
+    </div>
+  </div>
+
+  <div class="card shadow-sm">
+    <div class="card-body">
+      <h5 class="mb-3">Mascotas</h5>
+
+      {% if pets %}
+        <div class="table-responsive">
+          <table class="table table-striped table-hover align-middle">
+            <thead>
+              <tr>
+                <th>Nombre</th>
+                <th>Especie / Raza</th>
+                <th class="text-center">Atenciones</th>
+                <th class="text-end">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for p in pets %}
+              <tr>
+                <td>{{ p.nombre }}</td>
+                <td style="white-space:nowrap;">{{ p.raza.especie.nombre }} / {{ p.raza.nombre }}</td>
+                <td class="text-center">{{ p.total_atenciones }}</td>
+                <td class="text-end" style="white-space:nowrap;">
+                  <a class="btn btn-sm btn-outline-primary"
+                     href="{% url 'ficha_clinica_mascota' p.id %}">
+                    Ver Ficha Clínica
+                  </a>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="alert alert-info mb-0">No hay mascotas para este cliente.</div>
+      {% endif %}
+    </div>
+  </div>
+{% endif %}
+{% endblock %}

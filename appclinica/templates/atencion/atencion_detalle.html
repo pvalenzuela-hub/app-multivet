@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Detalle Atención{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-3">
+  <div>
+    <h3 class="mb-0">Detalle de Atención</h3>
+    <div class="text-muted">
+      Cliente: {{ a.mascota.cliente.nombre }} ({{ a.mascota.cliente.rut }})<br>
+      Mascota: {{ a.mascota.nombre }} — {{ a.mascota.raza.especie.nombre }} / {{ a.mascota.raza.nombre }}
+    </div>
+  </div>
+  <div class="d-flex gap-2">
+    <a class="btn btn-outline-secondary" href="{% url 'atenciones_por_cliente' a.mascota.cliente.id %}">Volver</a>
+    <a class="btn btn-outline-primary" href="{% url 'citas_por_cliente' a.mascota.cliente.id %}">Ver Citas</a>
+  </div>
+</div>
+
+<div class="card shadow-sm mb-3">
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-md-4">
+        <div class="text-muted small">Fecha Atención</div>
+        <div class="fw-semibold">{{ a.fechaatencion }}</div>
+      </div>
+      <div class="col-12">
+        <div class="text-muted small">Evolución</div>
+        <div class="border rounded p-2 bg-light">{{ a.evolucion|linebreaksbr }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card shadow-sm mb-3">
+  <div class="card-body">
+    <h5 class="mb-3">Prestaciones / Detalle</h5>
+
+    {% if detalles %}
+      <div class="table-responsive">
+        <table class="table table-sm table-striped align-middle">
+          <thead>
+            <tr>
+              <th>Prestación</th>
+              <th>Observación</th>
+              <th style="white-space:nowrap;">Creado</th>
+              <th class="text-end" style="white-space:nowrap;">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for d in detalles %}
+            <tr>
+              <td style="white-space:nowrap;">{{ d.prestacion.nombre }}</td>
+              <td>{{ d.observacion|default:""|linebreaksbr }}</td>
+              <td style="white-space:nowrap;">{{ d.created_at }}</td>
+              <td class="text-end" style="white-space:nowrap;">
+                <a class="btn btn-sm btn-outline-primary"
+                  href="{% url 'atenciondetalle_update' a.mascota.cliente.id a.id d.id %}"
+                  title="Editar" aria-label="Editar">
+                  <i class="bi bi-pencil"></i>
+                </a>
+                <form method="post"
+                      action="{% url 'atenciondetalle_delete' a.mascota.cliente.id a.id d.id %}"
+                      class="d-inline"
+                      onsubmit="return confirm('¿Eliminar esta prestación?');">
+                  {% csrf_token %}
+                  <button type="submit"
+                          class="btn btn-sm btn-outline-danger"
+                          title="Eliminar" aria-label="Eliminar">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="alert alert-info mb-0">Esta atención no tiene prestaciones registradas.</div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-body">
+    <h5 class="mb-3">Citas de la Mascota</h5>
+
+    {% if proximas_citas %}
+      <div class="table-responsive">
+        <table class="table table-sm table-striped align-middle">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Control</th>
+              <th>Estado</th>
+              <th>Observación</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in proximas_citas %}
+            <tr>
+              <td style="white-space:nowrap;">{{ c.fecha }}</td>
+              <td>{{ c.control.nombre }}</td>
+              <td>{{ c.estado.nombre }}</td>
+              <td>{{ c.observacion|default:""|truncatechars:160 }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="alert alert-info mb-0">Esta mascota no tiene citas registradas.</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

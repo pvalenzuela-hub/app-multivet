@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 260" role="img" aria-labelledby="title desc">
+  <title id="title">Vetnex</title>
+  <desc id="desc">Logo de Vetnex con icono veterinario y marca</desc>
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#21c7bf"/>
+      <stop offset="100%" stop-color="#0f766e"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#134e4a"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="980" height="260" rx="34" fill="#ffffff"/>
+
+  <g transform="translate(40 35)">
+    <circle cx="95" cy="95" r="90" fill="url(#bg)"/>
+    <g fill="#ffffff">
+      <ellipse cx="60" cy="60" rx="16" ry="22" transform="rotate(-18 60 60)"/>
+      <ellipse cx="95" cy="46" rx="16" ry="22"/>
+      <ellipse cx="130" cy="60" rx="16" ry="22" transform="rotate(18 130 60)"/>
+      <ellipse cx="47" cy="99" rx="16" ry="22" transform="rotate(-40 47 99)"/>
+      <ellipse cx="143" cy="99" rx="16" ry="22" transform="rotate(40 143 99)"/>
+      <path d="M95 93c-28 0-51 19-51 44 0 27 22 47 51 47s51-20 51-47c0-25-23-44-51-44z"/>
+    </g>
+    <circle cx="95" cy="140" r="12" fill="#0f766e" opacity=".18"/>
+  </g>
+
+  <text x="212" y="128"
+        font-family="Inter, Arial, sans-serif"
+        font-size="92"
+        font-weight="800"
+        letter-spacing="-2"
+        fill="#0f766e">Vetnex</text>
+
+  <text x="216" y="180"
+        font-family="Inter, Arial, sans-serif"
+        font-size="24"
+        font-weight="700"
+        letter-spacing="4"
+        fill="#475569">PLATAFORMA VETERINARIA</text>
+</svg>

@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% block title %}Promociones{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-3">
+  <div>
+    <h2 class="mb-0">Promociones</h2>
+    <div class="text-muted">Listado y envio de promociones a clientes</div>
+  </div>
+  <div class="d-flex gap-2">
+    <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#promocionModal" data-url="{% url 'promocion_create' %}?modal=1">Nueva Promocion</button>
+  </div>
+</div>
+
+<form class="card card-body shadow-sm mb-3" method="get">
+  <div class="row g-2">
+    <div class="col-md-10">
+      <input class="form-control" name="q" value="{{ q }}" placeholder="Buscar por titulo, descripcion o texto">
+    </div>
+    <div class="col-md-2 d-grid">
+      <button class="btn btn-outline-primary" type="submit">Filtrar</button>
+    </div>
+  </div>
+</form>
+
+<div class="card shadow-sm">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead>
+        <tr>
+          <th>Titulo</th>
+          <th>Descripcion</th>
+          <th>Fecha creacion</th>
+          <th class="text-end">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+          <tr>
+            <td class="fw-semibold">{{ item.titulo }}</td>
+            <td>{{ item.descripcion|default:"-" }}</td>
+            <td>{{ item.fecha_creacion|date:"d-m-Y H:i" }}</td>
+            <td class="text-end">
+              <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#promocionModal" data-url="{% url 'promocion_detail' item.id %}?modal=1">Ver</button>
+              <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#promocionModal" data-url="{% url 'promocion_update' item.id %}?modal=1">Editar</button>
+              <a class="btn btn-sm btn-outline-danger" href="{% url 'promocion_delete' item.id %}">Eliminar</a>
+              <form class="d-inline" method="post" action="{% url 'promocion_enviar_prueba' item.id %}" data-prueba-form data-promocion="{{ item.titulo }}">
+                {% csrf_token %}
+                <button class="btn btn-sm btn-outline-success" type="submit">Enviar Prueba</button>
+              </form>
+              <form class="d-inline" method="post" action="{% url 'promocion_enviar_correo' item.id %}" data-envio-form data-promocion="{{ item.titulo }}">
+                {% csrf_token %}
+                <button class="btn btn-sm btn-success" type="submit">Enviar Correo</button>
+              </form>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="4" class="text-center text-muted py-4">No hay promociones.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="modal fade" id="promocionModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content" id="promocionModalContent"></div>
+  </div>
+</div>
+
+<div class="modal fade" id="confirmarEnvioModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content shadow">
+      <div class="modal-header border-0 pb-0">
+        <div>
+          <h5 class="modal-title">Confirmar envio de promocion</h5>
+          <div class="text-muted small">Esta accion enviara correos a clientes registrados.</div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-warning mb-3">
+          Antes de continuar, verifique que el contenido de la promocion y la configuracion SMTP de la veterinaria sean correctos.
+        </div>
+        <p class="mb-1">Promocion:</p>
+        <div class="fw-semibold mb-3" id="confirmarEnvioTitulo"></div>
+        <p class="mb-0 text-muted">Se enviara un correo electronico a todos los clientes que tengan email registrado. Esta accion no se puede deshacer.</p>
+      </div>
+      <div class="modal-footer border-0 pt-0">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-success" id="confirmarEnvioBtn">Enviar Promocion</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="confirmarPruebaModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content shadow">
+      <form method="post" id="confirmarPruebaForm">
+        {% csrf_token %}
+        <div class="modal-header border-0 pb-0">
+          <div>
+            <h5 class="modal-title">Enviar correo de prueba</h5>
+            <div class="text-muted small">Revise la promocion antes del envio masivo.</div>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+          <p class="mb-1">Promocion:</p>
+          <div class="fw-semibold mb-3" id="confirmarPruebaTitulo"></div>
+          <label class="form-label" for="correoPruebaInput">Correo destino para la prueba</label>
+          <input class="form-control" id="correoPruebaInput" name="correo_prueba" type="email" value="{{ veterinaria.correo_prueba|default:'' }}" required>
+          <div class="form-text">Solo se enviara a este correo. El valor quedara guardado como correo de prueba de la veterinaria.</div>
+        </div>
+        <div class="modal-footer border-0 pt-0">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-success">Enviar Prueba</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const promocionModal = document.getElementById('promocionModal');
+    const promocionModalContent = document.getElementById('promocionModalContent');
+    const confirmarEnvioModalEl = document.getElementById('confirmarEnvioModal');
+    const confirmarEnvioModal = new bootstrap.Modal(confirmarEnvioModalEl);
+    const confirmarEnvioTitulo = document.getElementById('confirmarEnvioTitulo');
+    const confirmarEnvioBtn = document.getElementById('confirmarEnvioBtn');
+    const confirmarPruebaModalEl = document.getElementById('confirmarPruebaModal');
+    const confirmarPruebaModal = new bootstrap.Modal(confirmarPruebaModalEl);
+    const confirmarPruebaTitulo = document.getElementById('confirmarPruebaTitulo');
+    const confirmarPruebaForm = document.getElementById('confirmarPruebaForm');
+    let envioFormPendiente = null;
+
+    promocionModal.addEventListener('show.bs.modal', function (event) {
+      promocionModalContent.innerHTML = '<div class="modal-body p-5 text-center text-muted">Cargando...</div>';
+      fetch(event.relatedTarget.getAttribute('data-url'))
+        .then(response => response.text())
+        .then(html => promocionModalContent.innerHTML = html);
+    });
+
+    promocionModal.addEventListener('hidden.bs.modal', function () {
+      promocionModalContent.innerHTML = '';
+    });
+
+    promocionModalContent.addEventListener('submit', function (event) {
+      const form = event.target.closest('[data-modal-form]');
+      if (!form) return;
+
+      event.preventDefault();
+      fetch(form.action, {
+        method: 'POST',
+        headers: {'X-Requested-With': 'XMLHttpRequest'},
+        body: new FormData(form)
+      })
+        .then(response => response.text())
+        .then(html => {
+          if (html.includes('data-modal-success')) {
+            window.location.reload();
+          } else {
+            promocionModalContent.innerHTML = html;
+          }
+        });
+    });
+
+    document.querySelectorAll('[data-envio-form]').forEach(function (form) {
+      form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        envioFormPendiente = form;
+        confirmarEnvioTitulo.textContent = form.getAttribute('data-promocion') || 'Promocion seleccionada';
+        confirmarEnvioModal.show();
+      });
+    });
+
+    confirmarEnvioBtn.addEventListener('click', function () {
+      if (envioFormPendiente) {
+        envioFormPendiente.submit();
+      }
+    });
+
+    document.querySelectorAll('[data-prueba-form]').forEach(function (form) {
+      form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        confirmarPruebaForm.action = form.action;
+        confirmarPruebaTitulo.textContent = form.getAttribute('data-promocion') || 'Promocion seleccionada';
+        confirmarPruebaModal.show();
+      });
+    });
+  });
+</script>
+{% endblock %}

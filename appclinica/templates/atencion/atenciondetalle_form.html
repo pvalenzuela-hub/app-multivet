@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Editar Prestación{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-3">
+  <div>
+    <h3 class="mb-0">Editar Prestación</h3>
+    <div class="text-muted">
+      Cliente: {{ cliente.nombre }} ({{ cliente.rut }})<br>
+      Mascota: {{ a.mascota.nombre }} — {{ a.mascota.raza.especie.nombre }} / {{ a.mascota.raza.nombre }}
+    </div>
+  </div>
+
+  <a class="btn btn-outline-secondary" href="{% url 'atencion_detalle' a.id %}">Volver</a>
+</div>
+
+<form method="post" class="card shadow-sm">
+  {% csrf_token %}
+
+  <div class="card-body">
+    {% if form.non_field_errors %}
+      <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    <div class="row g-3">
+      <div class="col-md-6">
+        <label class="form-label">Prestación</label>
+        {{ form.prestacion }}
+        {% if form.prestacion.errors %}<div class="text-danger small">{{ form.prestacion.errors }}</div>{% endif %}
+      </div>
+
+      <div class="col-12">
+        <label class="form-label">Observación</label>
+        {{ form.observacion }}
+        {% if form.observacion.errors %}<div class="text-danger small">{{ form.observacion.errors }}</div>{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="card-footer bg-white d-flex justify-content-end gap-2">
+    <a class="btn btn-outline-secondary" href="{% url 'atencion_detalle' a.id %}">Cancelar</a>
+    <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+  </div>
+</form>
+{% endblock %}

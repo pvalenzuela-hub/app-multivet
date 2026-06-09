@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Ingreso | Vetnex{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-sm-10 col-md-6 col-lg-5">
+
+    <div class="text-center mb-4">
+      <img src="{% static 'img/vetnex-logo.svg' %}" alt="Vetnex" class="img-fluid" style="max-width: 430px; width: 100%; height: auto;">
+    </div>
+
+    <div class="card shadow-sm">
+      <div class="card-body p-4">
+
+        {% if form.errors %}
+          <div class="alert alert-danger">
+            Usuario o contraseña incorrectos.
+          </div>
+        {% endif %}
+
+        <form method="post" action="{% url 'login' %}">
+          {% csrf_token %}
+
+          <div class="mb-3">
+            <label class="form-label">RUT</label>
+            <input type="text" name="username" class="form-control" autofocus required>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Contraseña</label>
+            <input type="password" name="password" class="form-control" required>
+          </div>
+
+          <input type="hidden" name="next" value="{{ next }}">
+
+          <div class="d-grid">
+            <button class="btn btn-primary" type="submit">Entrar</button>
+          </div>
+        </form>
+
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

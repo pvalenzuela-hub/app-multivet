@@ -1,0 +1,252 @@
+{% extends "base.html" %}
+{% block title %}Panel{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-3">
+  <div>
+    <h2 class="mb-0">Panel</h2>
+    <div class="text-muted">Indicadores clínicos · {{ today|date:"d/m/Y" }}</div>
+  </div>
+
+  <div class="d-flex gap-2">
+    <a class="btn btn-outline-secondary" href="{% url 'cliente_list' %}">Clientes</a>
+  </div>
+</div>
+
+<!-- KPIs -->
+<div class="row g-3 mb-3">
+  <div class="col-12 col-lg-3">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <div class="text-muted small">Clientes</div>
+        <div class="fs-3 fw-semibold">{{ total_clientes }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-3">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <div class="text-muted small">Mascotas</div>
+        <div class="fs-3 fw-semibold">{{ total_mascotas }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-2">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <div class="text-muted small">Atenciones (hoy)</div>
+        <div class="fs-3 fw-semibold">{{ atenciones_hoy }}</div>
+        <div class="text-muted small">7 días: {{ atenciones_7d }} · 30 días: {{ atenciones_30d }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-2">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <div class="text-muted small">Citas Pendientes</div>
+        <div class="fs-3 fw-semibold">{{ citas_pendientes_total }}</div>
+        <div class="text-muted small">Hoy: {{ citas_hoy_pendientes }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-2">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <div class="text-muted small">Total Reservas</div>
+        <div class="fs-3 fw-semibold">{{ total_reservas }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card shadow-sm mb-3">
+  <div class="card-header bg-white fw-semibold">Reservas próximas 14 días</div>
+  <div class="card-body">
+    <div class="row g-3">
+      {% for dia in agenda_reservas_14d %}
+        <div class="col-12 col-md-6 col-xl-3">
+          <div class="border rounded p-3 h-100 bg-light-subtle">
+            <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+              <div>
+                <div class="fw-semibold">{{ dia.fecha|date:"l" }}</div>
+                <div class="text-muted small">{{ dia.fecha|date:"d/m/Y" }}</div>
+              </div>
+              <span class="badge text-bg-secondary">{{ dia.total }}</span>
+            </div>
+
+            {% if dia.items %}
+              <div class="d-grid gap-2">
+                {% for item in dia.items %}
+                  <div class="bg-white border rounded p-2">
+                    <div class="small text-muted">{{ item.hora_inicio|time:"H:i" }} - {{ item.hora_fin|time:"H:i" }}</div>
+                    <div class="fw-semibold">{{ item.mascota.nombre }}</div>
+                    <div class="small {% if item.estado == 'confirmada' %}text-success{% elif item.estado == 'cancelada' %}text-danger{% else %}text-warning{% endif %}">{{ item.evento.nombre }}</div>
+                    <div class="small text-muted">{{ item.get_estado_display }}</div>
+                  </div>
+                {% endfor %}
+              </div>
+            {% else %}
+              <div class="text-muted small">Sin reservas</div>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <!-- Atenciones últimos 7 días -->
+  <div class="col-12 col-lg-4">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-white fw-semibold">Atenciones últimos 7 días</div>
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table table-sm align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th class="text-end">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for x in serie_atenciones_7d %}
+              <tr>
+                <td style="white-space:nowrap;">{{ x.fecha|date:"d/m/Y" }}</td>
+                <td class="text-end">{{ x.total }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div class="text-muted small mt-2">
+          Total atenciones (histórico): {{ total_atenciones }}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Prestaciones -->
+  <div class="col-12 col-lg-4">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-white fw-semibold">Prestaciones</div>
+      <div class="card-body">
+        <div class="mb-2">
+          <div class="text-muted small">Prestaciones registradas (histórico)</div>
+          <div class="fs-4 fw-semibold">{{ prestaciones_total }}</div>
+          <div class="text-muted small">Últimos 30 días: {{ prestaciones_30d }}</div>
+          <div class="text-muted small">Prom. prestaciones por atención: <b>{{ prom_prest_por_atencion }}</b></div>
+        </div>
+
+        <hr>
+
+        <div class="fw-semibold mb-2">Top 10 prestaciones (30 días)</div>
+        {% if top_prestaciones_30d %}
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+              <thead>
+                <tr>
+                  <th>Prestación</th>
+                  <th class="text-end">Usos</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for p in top_prestaciones_30d %}
+                <tr>
+                  <td>{{ p.prestacion__nombre }}</td>
+                  <td class="text-end">{{ p.total }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="alert alert-info mb-0">Sin prestaciones en los últimos 30 días.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Citas: próximas y vencidas -->
+  <div class="col-12 col-lg-4">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-white fw-semibold">Citas Pendientes: control operacional</div>
+      <div class="card-body">
+        <div class="fw-semibold mb-2">Controles más frecuentes (próx. 7 días)</div>
+        {% if top_controles_7d %}
+          <ul class="list-group list-group-flush mb-3">
+            {% for c in top_controles_7d %}
+              <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                <span>{{ c.control__nombre }}</span>
+                <span class="badge text-bg-primary">{{ c.total }}</span>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <div class="text-muted small mb-3">No hay pendientes dentro de los próximos 7 días.</div>
+        {% endif %}
+
+        <div class="fw-semibold mb-2">Próximas 48 horas (Pendiente)</div>
+        {% if citas_proximas_2d %}
+          <div class="table-responsive mb-3">
+            <table class="table table-sm align-middle mb-0">
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Cliente</th>
+                  <th>Mascota</th>
+                  <th>Control</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for x in citas_proximas_2d %}
+                <tr>
+                  <td style="white-space:nowrap;">{{ x.fecha|date:"d/m/Y" }}</td>
+                  <td>{{ x.mascota.cliente.nombre }}</td>
+                  <td>{{ x.mascota.nombre }}</td>
+                  <td>{{ x.control.nombre }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="text-muted small mb-3">Sin citas pendientes para los próximos 2 días.</div>
+        {% endif %}
+
+        <div class="fw-semibold mb-2">Vencidas (Pendiente)</div>
+        {% if citas_vencidas %}
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Cliente</th>
+                  <th>Mascota</th>
+                  <th>Control</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for x in citas_vencidas %}
+                <tr>
+                  <td style="white-space:nowrap;">{{ x.fecha|date:"d/m/Y" }}</td>
+                  <td>{{ x.mascota.cliente.nombre }}</td>
+                  <td>{{ x.mascota.nombre }}</td>
+                  <td>{{ x.control.nombre }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="text-muted small">Sin citas pendientes vencidas.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

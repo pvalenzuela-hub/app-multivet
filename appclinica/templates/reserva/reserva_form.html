@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Nueva Reserva{% endblock %}
+
+{% block content %}
+<div class="text-center mb-4">
+  <div class="brand d-inline-flex text-start">
+    <img src="{% static 'img/vetnex-logo.svg' %}" alt="Vetnex" class="brand-logo">
+    <div class="lh-1">
+      <div class="brand-title">
+        <span class="brand-pet">Pet</span><span class="brand-salud">Salud</span>
+      </div>
+      <div class="brand-sub">CLÍNICA VETERINARIA</div>
+    </div>
+  </div>
+</div>
+
+<div class="d-flex justify-content-between align-items-start mb-3 gap-2">
+  <div>
+    <h2 class="mb-0">Nueva Reserva</h2>
+    <div class="text-muted">Cliente validado: {{ cliente.nombre }} ({{ cliente.rut }})</div>
+  </div>
+  <a class="btn btn-outline-secondary" href="{% url 'reserva_publica_cambiar_cliente' %}">Cambiar cliente</a>
+</div>
+
+<form method="post" class="card shadow-sm">
+  {% csrf_token %}
+  <div class="card-body">
+    {% if form.non_field_errors %}
+      <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    <div class="row g-3">
+      <div class="col-md-6">
+        <label class="form-label">{{ form.mascota.label }}</label>
+        {{ form.mascota }}
+        {% if form.mascota.errors %}<div class="text-danger small mt-1">{{ form.mascota.errors }}</div>{% endif %}
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">{{ form.evento.label }}</label>
+        {{ form.evento }}
+        {% if form.evento.errors %}<div class="text-danger small mt-1">{{ form.evento.errors }}</div>{% endif %}
+        <div id="evento-descripcion" class="mt-2 fw-semibold d-none"></div>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">{{ form.fecha.label }}</label>
+        {{ form.fecha }}
+        {% if form.fecha.errors %}<div class="text-danger small mt-1">{{ form.fecha.errors }}</div>{% endif %}
+      </div>
+      <div class="col-md-8">
+        <label class="form-label">{{ form.email_contacto.label }}</label>
+        {{ form.email_contacto }}
+        {% if form.email_contacto.errors %}<div class="text-danger small mt-1">{{ form.email_contacto.errors }}</div>{% endif %}
+        <div class="form-text">Puede usar un email distinto para recordatorios. No actualiza la ficha del cliente.</div>
+      </div>
+      <div class="col-12">
+        <label class="form-label">{{ form.observacion.label }}</label>
+        {{ form.observacion }}
+        {% if form.observacion.errors %}<div class="text-danger small mt-1">{{ form.observacion.errors }}</div>{% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="card-footer d-flex justify-content-between align-items-center">
+    <span class="small text-muted">Se mostrarán horarios disponibles dentro de los próximos {{ ventana_dias }} días.</span>
+    <button class="btn btn-primary" type="submit">Ver Horarios</button>
+  </div>
+</form>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const eventoSelect = document.getElementById("id_evento");
+    const descripcionBox = document.getElementById("evento-descripcion");
+    if (!eventoSelect || !descripcionBox) {
+      return;
+    }
+
+    function renderDescripcion() {
+      const selectedOption = eventoSelect.options[eventoSelect.selectedIndex];
+      const descripcion = selectedOption ? (selectedOption.dataset.descripcion || "").trim() : "";
+
+      descripcionBox.textContent = descripcion;
+      descripcionBox.classList.toggle("d-none", !descripcion);
+    }
+
+    eventoSelect.addEventListener("change", renderDescripcion);
+    renderDescripcion();
+  });
+</script>
+{% endblock %}

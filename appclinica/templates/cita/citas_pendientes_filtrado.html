@@ -1,0 +1,234 @@
+{% extends "base.html" %}
+{% block title %}Citas Pendientes{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-3">
+  <div>
+    <h2 class="mb-0">Citas Pendientes</h2>
+    <div class="text-muted">Listado global (estado Pendiente)</div>
+  </div>
+</div>
+
+<form method="get" class="card shadow-sm mb-3">
+  <div class="card-body">
+    <div class="row g-2 align-items-end">
+      <!-- Búsqueda general por cliente, RUT o mascota -->
+      <div class="col-12 col-lg-4">
+        <label class="form-label">Buscar (cliente / RUT / mascota)</label>
+        <input class="form-control" name="q" value="{{ q }}">
+      </div>
+      <!-- Selector de tipo de control -->
+      <div class="col-12 col-lg-4">
+        <label class="form-label">Tipo de control</label>
+        <select class="form-select" name="control">
+          <option value="">Todos</option>
+          {% for ctrl in controles %}
+            <option value="{{ ctrl.id }}" {% if ctrl.id|stringformat:"s" == control_id %}selected{% endif %}>
+              {{ ctrl.nombre }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-lg-2 d-grid">
+        <button class="btn btn-primary" type="submit">Filtrar</button>
+      </div>
+      <div class="col-6 col-lg-2 d-grid">
+        <a class="btn btn-outline-secondary" href="{% url 'citas_pendientes_filtrado' %}">Limpiar</a>
+      </div>
+    </div>
+  </div>
+</form>
+
+<div class="card shadow-sm">
+  <div class="card-body">
+    {% if citas %}
+      <div class="table-responsive">
+        <table id="basic-datatable" class="table table-striped table-hover align-middle">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Cliente</th>
+              <th>Mascota</th>
+              <th>Control</th>
+              <th>Estado</th>
+              <th>Obs.</th>
+              <th class="text-end">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in citas %}
+              <tr>
+                <td style="white-space:nowrap;">{{ c.fecha }}</td>
+                <td style="white-space:nowrap;">{{ c.mascota.cliente.nombre }}</td>
+                <td>{{ c.mascota.nombre }}</td>
+                <td>{{ c.control.nombre }}</td>
+                <td>{{ c.estado.nombre }}</td>
+                <td style="max-width:420px;">{{ c.observacion|default:""|truncatechars:80 }}</td>
+                <td class="text-end" style="white-space:nowrap;">
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-success"
+                    title="Marcar realizada"
+                    data-bs-toggle="modal"
+                    data-bs-target="#modalCheckCita"
+                    data-url="{% url 'cita_check_global' c.id %}"
+                    data-descripcion="control {{c.control.nombre }} para {{ c.mascota.nombre }} de fecha {{ c.fecha|date:'d/m/Y' }}">
+                      <i class="bi bi-check-circle-fill"></i>
+                  </button>
+
+                  <a href="{% url 'cita_update_global' c.id %}" class="btn btn-sm btn-primary" title="Editar">
+                      <i class="bi bi-pencil"></i>
+                  </a>
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-danger"
+                    title="Eliminar"
+                    data-bs-toggle="modal"
+                    data-bs-target="#modalEliminarCita"
+                    data-url="{% url 'cita_delete_global' c.id %}"
+                    data-descripcion="control {{c.control.nombre}} para {{ c.mascota.nombre }} de fecha {{ c.fecha|date:'d/m/Y' }}">
+                    <i class="bi bi-trash-fill"></i>
+                  </button>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="alert alert-info mb-0">No hay citas pendientes.</div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="modal fade" id="modalEliminarCita" tabindex="-1" aria-labelledby="modalEliminarCitaLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" id="formEliminarCita">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalEliminarCitaLabel">Confirmar eliminación</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+
+                <div class="modal-body">
+                    <p class="mb-0">
+                        ¿Seguro que deseas eliminar <span id="textoDescripcionCita" class="fw-bold">esta cita</span>?
+                    </p>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-trash-fill"></i> Eliminar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalCheckCita" tabindex="-1" aria-labelledby="modalCheckCitaLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" id="formCheckCita">
+        {% csrf_token %}
+
+        <div class="modal-header bg-success text-white">
+          <h5 class="modal-title" id="modalCheckCitaLabel">
+            Confirmar cita realizada
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+
+        <div class="modal-body">
+          <p class="mb-0">
+            ¿Deseas marcar como realizada
+            <span id="textoDescripcionCheck" class="fw-bold">esta cita</span>?
+          </p>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+            Cancelar
+          </button>
+          <button type="submit" class="btn btn-success">
+            <i class="bi bi-check-circle-fill"></i> Confirmar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+  {# Solo cargamos DataTables porque jQuery ya viene desde base.html #}
+  <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+
+  <script>
+    $(document).ready(function() {
+      if ($.fn.dataTable.isDataTable('#basic-datatable')) {
+        $('#basic-datatable').DataTable().destroy();
+      }
+      $('#basic-datatable').DataTable({
+        ordering: false,
+        order: [],
+        columnDefs: [
+          { targets: 0, orderable: false }
+        ],
+        language: {
+          search: 'Buscar:',
+          infoEmpty: 'Mostrando 0 a 0 de 0 entradas',
+          info: 'Mostrando _START_ a _END_ de _TOTAL_ entradas',
+          infoFiltered: '(filtrado de _MAX_ total de entradas)',
+          lengthMenu: 'Mostrar _MENU_ entradas',
+          loadingRecords: 'Cargando...',
+          processing: 'Procesando...',
+          paginate: {
+            first: 'Primero',
+            last: 'Último',
+            next: 'Siguiente',
+            previous: 'Anterior'
+          }
+        },
+        pageLength: 10
+      });
+    });
+
+
+    document.addEventListener('DOMContentLoaded', function () {
+        const modalEliminar = document.getElementById('modalEliminarCita');
+        const formEliminar = document.getElementById('formEliminarCita');
+        const textoDescripcion = document.getElementById('textoDescripcionCita');
+
+        modalEliminar.addEventListener('show.bs.modal', function (event) {
+            const boton = event.relatedTarget;
+            const url = boton.getAttribute('data-url');
+            const descripcion = boton.getAttribute('data-descripcion') || 'esta cita';
+
+            formEliminar.setAttribute('action', url);
+            textoDescripcion.textContent = descripcion;
+        });
+    });
+
+    document.addEventListener('DOMContentLoaded', function () {
+        const modalCheck = document.getElementById('modalCheckCita');
+        const formCheck = document.getElementById('formCheckCita');
+        const textoDescripcionCheck = document.getElementById('textoDescripcionCheck');
+
+        modalCheck.addEventListener('show.bs.modal', function (event) {
+            const boton = event.relatedTarget;
+            const url = boton.getAttribute('data-url');
+            const descripcion = boton.getAttribute('data-descripcion') || 'esta cita';
+
+            formCheck.setAttribute('action', url);
+            textoDescripcionCheck.textContent = descripcion;
+        });
+    });
+
+  </script>
+{% endblock %}

@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Reserva Confirmada{% endblock %}
+
+{% block content %}
+<div class="text-center mb-4">
+  <div class="brand d-inline-flex text-start">
+    <img src="{% static 'img/vetnex-logo.svg' %}" alt="Vetnex" class="brand-logo">
+    <div class="lh-1">
+      <div class="brand-title">
+        <span class="brand-pet">Pet</span><span class="brand-salud">Salud</span>
+      </div>
+      <div class="brand-sub">CLÍNICA VETERINARIA</div>
+    </div>
+  </div>
+</div>
+
+<div class="row justify-content-center">
+  <div class="col-12 col-lg-8">
+    <div class="card shadow-sm border-success">
+      <div class="card-body p-4">
+        <h2 class="text-success mb-3">Reserva Confirmada</h2>
+        <p class="mb-4">Su solicitud fue registrada correctamente.</p>
+
+        <div class="row g-3">
+          <div class="col-md-6">
+            <div class="text-muted small">Cliente</div>
+            <div class="fw-semibold">{{ cliente.nombre }}</div>
+          </div>
+          <div class="col-md-6">
+            <div class="text-muted small">Mascota</div>
+            <div class="fw-semibold">{{ reserva.mascota.nombre }}</div>
+          </div>
+          <div class="col-md-6">
+            <div class="text-muted small">Evento</div>
+            <div class="fw-semibold">{{ reserva.evento.nombre }}</div>
+          </div>
+          <div class="col-md-6">
+            <div class="text-muted small">Fecha y hora</div>
+            <div class="fw-semibold">{{ reserva.fecha|date:"d-m-Y" }} · {{ reserva.hora_inicio|time:"H:i" }} a {{ reserva.hora_fin|time:"H:i" }}</div>
+          </div>
+          <div class="col-md-6">
+            <div class="text-muted small">Email de contacto</div>
+            <div class="fw-semibold">{{ reserva.email_contacto }}</div>
+          </div>
+          <div class="col-md-6">
+            <div class="text-muted small">Estado</div>
+            <div class="fw-semibold">{{ reserva.get_estado_display }}</div>
+          </div>
+          <div class="col-12">
+            <div class="text-muted small">Observación</div>
+            <div class="fw-semibold">{{ reserva.observacion|default:"-" }}</div>
+          </div>
+        </div>
+      </div>
+      <div class="card-footer d-flex justify-content-end gap-2">
+        <a class="btn btn-outline-secondary" href="{% url 'reserva_publica_cambiar_cliente' %}">Salir</a>
+        <a class="btn btn-primary" href="{% url 'reserva_publica_nueva' %}">Nueva Reserva</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
