@@ -922,5 +922,14 @@ class TenantIsolationTests(ReservaBaseMixin, TestCase):
         response = self.client.get(reverse("veterinaria_list"))
 
         self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Datos Veterinaria")
         self.assertContains(response, "Veterinaria activa")
         self.assertContains(response, "https://cdn.example.com/master-logo.png")
+        self.assertContains(response, "Nueva Veterinaria")
+        self.assertContains(response, "Eliminar")
+
+    def test_superuser_puede_eliminar_veterinaria_sin_dependencias(self):
+        response = self.client.post(reverse("veterinaria_delete", args=[self.otra_veterinaria.id]))
+
+        self.assertRedirects(response, reverse("veterinaria_list"))
+        self.assertFalse(veterinaria.objects.filter(id=self.otra_veterinaria.id).exists())

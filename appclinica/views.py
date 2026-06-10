@@ -2289,6 +2289,29 @@ def veterinaria_update(request, pk):
 
 
 @login_required
+def veterinaria_delete(request, pk):
+    if not request.user.is_superuser:
+        raise PermissionDenied
+
+    obj = get_object_or_404(veterinaria, pk=pk)
+    if request.method == "POST":
+        try:
+            obj.delete()
+            if request.session.get(ACTIVE_VETERINARIA_SESSION_KEY) == obj.id:
+                request.session.pop(ACTIVE_VETERINARIA_SESSION_KEY, None)
+            messages.success(request, "Veterinaria eliminada correctamente.")
+        except (ProtectedError, IntegrityError):
+            messages.error(request, "No se puede eliminar la veterinaria porque está en uso.")
+        return redirect("veterinaria_list")
+
+    return render(request, "catalogo/confirm_delete.html", {
+        "title": "Eliminar Veterinaria",
+        "object_name": obj.nombre,
+        "back_url": "veterinaria_list",
+    })
+
+
+@login_required
 def veterinaria_set_active(request):
     if not request.user.is_superuser:
         raise PermissionDenied

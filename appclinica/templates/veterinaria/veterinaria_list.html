@@ -47,6 +47,9 @@
                 </form>
               {% endif %}
               <a class="btn btn-sm btn-outline-secondary" href="{% url 'veterinaria_update' item.id %}">Editar</a>
+              {% if es_superusuario %}
+                <a class="btn btn-sm btn-outline-danger" href="{% url 'veterinaria_delete' item.id %}">Eliminar</a>
+              {% endif %}
             </td>
           </tr>
         {% empty %}
