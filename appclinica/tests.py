@@ -1,5 +1,7 @@
 from datetime import time, timedelta
+from io import StringIO
 
+from django.core.management import call_command
 from django.core.exceptions import ValidationError
 from django.core import mail
 from django.contrib.auth.models import Group
@@ -24,6 +26,7 @@ from .models import (
     OrigenCliente,
     obtener_slots_disponibles,
     promocion,
+    prestacion,
     raza,
     reserva,
     veterinaria,
@@ -118,6 +121,32 @@ class LoginTemplateTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "vetnex-logo.svg")
         self.assertContains(response, "alt=\"Vetnex\"")
+
+
+class ProductionSeedCommandTests(TestCase):
+    def test_seed_production_reemplaza_demo_y_deja_base(self):
+        out = StringIO()
+        call_command(
+            "seed_production",
+            stdout=out,
+            nombre="Vetnex",
+            correo="contacto@vetnex.cl",
+            logo_url="https://cdn.example.com/vetnex-logo.svg",
+        )
+
+        vet = veterinaria.objects.get(pk=1)
+
+        self.assertEqual(vet.nombre, "Vetnex")
+        self.assertEqual(vet.correo, "contacto@vetnex.cl")
+        self.assertEqual(vet.logo, "https://cdn.example.com/vetnex-logo.svg")
+        self.assertTrue(estadocliente.objects.filter(pk=1, nombre="Activo").exists())
+        self.assertTrue(estadocita.objects.filter(pk=1, nombre="Pendiente").exists())
+        self.assertFalse(cliente.objects.filter(rut="22222222-2").exists())
+        self.assertTrue(control.objects.filter(veterinaria=vet, nombre="Control general").exists())
+        self.assertTrue(prestacion.objects.filter(veterinaria=vet, nombre="Consulta general").exists())
+        self.assertFalse(control.objects.filter(veterinaria=vet, nombre="Control demo").exists())
+        self.assertFalse(prestacion.objects.filter(veterinaria=vet, nombre="Consulta demo").exists())
+        self.assertIn("Seed de produccion aplicado correctamente.", out.getvalue())
 
 
 class ReservaPublicaFlowTests(ReservaBaseMixin, TestCase):
