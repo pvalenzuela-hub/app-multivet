@@ -35,9 +35,10 @@ from .models import (
 from .utils.rut import rut_dv
 
 
-RESERVA_CLIENTE_SESSION_KEY = "reserva_publica_cliente_id"
-RESERVA_DRAFT_SESSION_KEY = "reserva_publica_draft"
-RESERVA_REGISTRO_SESSION_KEY = "reserva_publica_registro"
+RESERVA_PUBLICA_SESSION_PREFIX = "reserva_publica"
+RESERVA_PUBLICA_CLIENTE_SUFFIX = "cliente_id"
+RESERVA_PUBLICA_DRAFT_SUFFIX = "draft"
+RESERVA_PUBLICA_REGISTRO_SUFFIX = "registro"
 
 
 class ReservaBaseMixin:
@@ -109,13 +110,21 @@ class ReservaBaseMixin:
 
     def validar_cliente_publico(self, cliente_obj=None, email=None):
         cliente_obj = cliente_obj or self.cliente
-        return self.client.post(reverse("reserva_publica_acceso"), {
+        return self.client.post(reverse("reserva_publica_acceso", args=[self.veterinaria.reserva_publica_token]), {
             "rut": cliente_obj.rut,
             "email": email or cliente_obj.email,
         })
 
+    def reserva_publica_session_key(self, suffix):
+        return f"{RESERVA_PUBLICA_SESSION_PREFIX}:{self.veterinaria.reserva_publica_token}:{suffix}"
+
 
 class LoginTemplateTests(TestCase):
+    def test_root_redirige_a_login_si_no_autenticado(self):
+        response = self.client.get(reverse("home"))
+
+        self.assertRedirects(response, reverse("login"))
+
     def test_login_renderiza_logo_nuevo(self):
         response = self.client.get(reverse("login"))
 
@@ -146,6 +155,24 @@ class LoginTemplateTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, 'href="/logout/"')
         self.assertEqual(response.content.decode().count('action="/logout/"'), 3)
+
+    def test_login_redirige_a_panel(self):
+        user = get_user_model().objects.create_user(username="panel_login", password="secret123")
+
+        response = self.client.post(reverse("login"), {
+            "username": "panel_login",
+            "password": "secret123",
+        })
+
+        self.assertRedirects(response, reverse("dashboard_panel"))
+
+    def test_root_redirige_a_panel_si_autenticado(self):
+        user = get_user_model().objects.create_user(username="root_panel", password="secret123")
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("home"))
+
+        self.assertRedirects(response, reverse("dashboard_panel"))
 
 
 class EstadoCatalogoTests(ReservaBaseMixin, TestCase):
@@ -280,45 +307,55 @@ class ReservaPublicaFlowTests(ReservaBaseMixin, TestCase):
         self.evento.save(update_fields=["descripcion"])
         self.validar_cliente_publico()
 
-        response = self.client.get(reverse("reserva_publica_nueva"))
+        response = self.client.get(reverse("reserva_publica_nueva", args=[self.veterinaria.reserva_publica_token]))
 
         self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "vetnex-logo.svg")
+        self.assertNotContains(response, "PetSalud")
         self.assertContains(response, 'data-descripcion="Ayuno requerido antes del examen"', html=False)
 
     def test_acceso_publico_valido_guarda_cliente_en_sesion(self):
         response = self.validar_cliente_publico()
 
-        self.assertRedirects(response, reverse("reserva_publica_nueva"))
-        self.assertEqual(self.client.session.get(RESERVA_CLIENTE_SESSION_KEY), self.cliente.id)
+        self.assertRedirects(response, reverse("reserva_publica_nueva", args=[self.veterinaria.reserva_publica_token]))
+        self.assertEqual(
+            self.client.session.get(self.reserva_publica_session_key(RESERVA_PUBLICA_CLIENTE_SUFFIX)),
+            self.cliente.id,
+        )
 
     def test_acceso_publico_rechaza_email_incorrecto(self):
         response = self.validar_cliente_publico(email="otro@example.com")
 
-        self.assertRedirects(response, reverse("reserva_publica_nueva"))
+        self.assertRedirects(response, reverse("reserva_publica_nueva", args=[self.veterinaria.reserva_publica_token]))
         self.cliente.refresh_from_db()
         self.assertEqual(self.cliente.email, "otro@example.com")
-        self.assertEqual(self.client.session.get(RESERVA_CLIENTE_SESSION_KEY), self.cliente.id)
+        self.assertEqual(
+            self.client.session.get(self.reserva_publica_session_key(RESERVA_PUBLICA_CLIENTE_SUFFIX)),
+            self.cliente.id,
+        )
 
     def test_acceso_publico_muestra_registro_si_rut_no_existe(self):
-        response = self.client.post(reverse("reserva_publica_acceso"), {
+        response = self.client.post(reverse("reserva_publica_acceso", args=[self.veterinaria.reserva_publica_token]), {
             "rut": f"11111111-{rut_dv('11111111')}",
             "email": "nuevo@example.com",
         })
 
         self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "vetnex-logo.svg")
+        self.assertNotContains(response, "PetSalud")
         self.assertContains(response, "Registrarme")
         self.assertEqual(
-            self.client.session.get(RESERVA_REGISTRO_SESSION_KEY),
+            self.client.session.get(self.reserva_publica_session_key(RESERVA_PUBLICA_REGISTRO_SUFFIX)),
             {"rut": f"11111111-{rut_dv('11111111')}", "email": "nuevo@example.com"},
         )
 
     def test_registro_publico_crea_cliente_web_y_mascota(self):
         rut_nuevo = f"11111111-{rut_dv('11111111')}"
         session = self.client.session
-        session[RESERVA_REGISTRO_SESSION_KEY] = {"rut": rut_nuevo, "email": "nuevo@example.com"}
+        session[self.reserva_publica_session_key(RESERVA_PUBLICA_REGISTRO_SUFFIX)] = {"rut": rut_nuevo, "email": "nuevo@example.com"}
         session.save()
 
-        response = self.client.post(reverse("reserva_publica_registro"), {
+        response = self.client.post(reverse("reserva_publica_registro", args=[self.veterinaria.reserva_publica_token]), {
             "nombre": "Cliente Web",
             "telefono": "777777777",
             "direccion": "Direccion Web 123",
@@ -332,18 +369,21 @@ class ReservaPublicaFlowTests(ReservaBaseMixin, TestCase):
         nuevo_cliente = cliente.objects.get(rut=rut_nuevo)
         nueva_mascota = mascota.objects.get(cliente=nuevo_cliente)
 
-        self.assertRedirects(response, reverse("reserva_publica_nueva"))
+        self.assertRedirects(response, reverse("reserva_publica_nueva", args=[self.veterinaria.reserva_publica_token]))
         self.assertEqual(nuevo_cliente.origen, OrigenCliente.WEB)
         self.assertEqual(nuevo_cliente.email, "nuevo@example.com")
         self.assertEqual(nueva_mascota.nombre, "Kiara")
-        self.assertEqual(self.client.session.get(RESERVA_CLIENTE_SESSION_KEY), nuevo_cliente.id)
+        self.assertEqual(
+            self.client.session.get(self.reserva_publica_session_key(RESERVA_PUBLICA_CLIENTE_SUFFIX)),
+            nuevo_cliente.id,
+        )
 
     def test_registro_publico_redirige_a_existente_si_rut_ya_existe(self):
         session = self.client.session
-        session[RESERVA_REGISTRO_SESSION_KEY] = {"rut": self.cliente.rut, "email": "actualizado@example.com"}
+        session[self.reserva_publica_session_key(RESERVA_PUBLICA_REGISTRO_SUFFIX)] = {"rut": self.cliente.rut, "email": "actualizado@example.com"}
         session.save()
 
-        response = self.client.post(reverse("reserva_publica_registro"), {
+        response = self.client.post(reverse("reserva_publica_registro", args=[self.veterinaria.reserva_publica_token]), {
             "nombre": "No importa",
             "telefono": "123",
             "direccion": "X",
@@ -354,34 +394,44 @@ class ReservaPublicaFlowTests(ReservaBaseMixin, TestCase):
             "fechanac": "",
         })
 
-        self.assertRedirects(response, reverse("reserva_publica_nueva"))
+        self.assertRedirects(response, reverse("reserva_publica_nueva", args=[self.veterinaria.reserva_publica_token]))
         self.cliente.refresh_from_db()
         self.assertEqual(self.cliente.email, "actualizado@example.com")
         self.assertEqual(mascota.objects.filter(cliente=self.cliente).count(), 1)
 
     def test_registro_publico_sin_contexto_redirige_a_acceso(self):
-        response = self.client.get(reverse("reserva_publica_registro"))
+        response = self.client.get(reverse("reserva_publica_registro", args=[self.veterinaria.reserva_publica_token]))
 
-        self.assertRedirects(response, reverse("reserva_publica_acceso"))
+        self.assertRedirects(response, reverse("reserva_publica_acceso", args=[self.veterinaria.reserva_publica_token]))
 
     def test_flujo_publico_crea_reserva_y_no_modifica_email_del_cliente(self):
         self.validar_cliente_publico()
 
-        response = self.client.post(reverse("reserva_publica_nueva"), {
+        response = self.client.post(reverse("reserva_publica_nueva", args=[self.veterinaria.reserva_publica_token]), {
             "mascota": self.mascota.id,
             "evento": self.evento.id,
             "fecha": self.manana.isoformat(),
             "email_contacto": "recordatorios@example.com",
             "observacion": "Ayuno de 8 horas",
         })
-        self.assertRedirects(response, reverse("reserva_publica_slots"))
+        self.assertRedirects(response, reverse("reserva_publica_slots", args=[self.veterinaria.reserva_publica_token]))
 
-        response = self.client.post(reverse("reserva_publica_slots"), {
+        response = self.client.get(reverse("reserva_publica_slots", args=[self.veterinaria.reserva_publica_token]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "vetnex-logo.svg")
+        self.assertNotContains(response, "PetSalud")
+
+        response = self.client.post(reverse("reserva_publica_slots", args=[self.veterinaria.reserva_publica_token]), {
             "horario_id": self.horario.id,
         })
 
         creada = reserva.objects.get()
-        self.assertRedirects(response, reverse("reserva_publica_confirmacion", args=[creada.id]))
+        self.assertRedirects(response, reverse("reserva_publica_confirmacion", args=[self.veterinaria.reserva_publica_token, creada.id]))
+
+        response = self.client.get(reverse("reserva_publica_confirmacion", args=[self.veterinaria.reserva_publica_token, creada.id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "vetnex-logo.svg")
+        self.assertNotContains(response, "PetSalud")
         self.assertEqual(creada.mascota, self.mascota)
         self.assertEqual(creada.evento, self.evento)
         self.assertEqual(creada.email_contacto, "recordatorios@example.com")
@@ -391,7 +441,7 @@ class ReservaPublicaFlowTests(ReservaBaseMixin, TestCase):
     def test_formulario_publico_no_acepta_reservar_para_mascota_de_otro_cliente(self):
         self.validar_cliente_publico()
 
-        response = self.client.post(reverse("reserva_publica_nueva"), {
+        response = self.client.post(reverse("reserva_publica_nueva", args=[self.veterinaria.reserva_publica_token]), {
             "mascota": self.otra_mascota.id,
             "evento": self.evento.id,
             "fecha": self.manana.isoformat(),
@@ -401,12 +451,12 @@ class ReservaPublicaFlowTests(ReservaBaseMixin, TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "id_mascota_error")
-        self.assertIsNone(self.client.session.get(RESERVA_DRAFT_SESSION_KEY))
+        self.assertIsNone(self.client.session.get(self.reserva_publica_session_key(RESERVA_PUBLICA_DRAFT_SUFFIX)))
 
     def test_formulario_publico_rechaza_fecha_hoy(self):
         self.validar_cliente_publico()
 
-        response = self.client.post(reverse("reserva_publica_nueva"), {
+        response = self.client.post(reverse("reserva_publica_nueva", args=[self.veterinaria.reserva_publica_token]), {
             "mascota": self.mascota.id,
             "evento": self.evento.id,
             "fecha": self.hoy.isoformat(),
@@ -422,7 +472,7 @@ class ReservaPublicaFlowTests(ReservaBaseMixin, TestCase):
         self.validar_cliente_publico()
         fecha_fuera_de_rango = self.manana + timedelta(days=14)
 
-        response = self.client.post(reverse("reserva_publica_nueva"), {
+        response = self.client.post(reverse("reserva_publica_nueva", args=[self.veterinaria.reserva_publica_token]), {
             "mascota": self.mascota.id,
             "evento": self.evento.id,
             "fecha": fecha_fuera_de_rango.isoformat(),
@@ -433,6 +483,54 @@ class ReservaPublicaFlowTests(ReservaBaseMixin, TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "proximos 14 dias")
         self.assertEqual(reserva.objects.count(), 0)
+
+    def test_link_publico_con_token_usa_contexto_correcto(self):
+        otra_veterinaria = veterinaria.objects.create(
+            nombre="Vet Link",
+            correo="link@vet.local",
+            smtp_host="",
+            smtp_port=587,
+            smtp_usuario="",
+            smtp_password="",
+        )
+        otra_especie = especie.objects.create(nombre="Felino Link", veterinaria=otra_veterinaria)
+        otra_raza = raza.objects.create(nombre="Mestizo Link", especie=otra_especie)
+        otra_cliente = cliente.objects.create(
+            veterinaria=otra_veterinaria,
+            rut=f"11111111-{rut_dv('11111111')}",
+            nombre="Cliente Link",
+            email="link@example.com",
+            telefono="777777777",
+            direccion="Link 123",
+            comuna=self.comuna,
+            estado=self.estado_cliente,
+            origen=OrigenCliente.SISTEMA,
+        )
+        otra_mascota = mascota.objects.create(cliente=otra_cliente, raza=otra_raza, nombre="Mishi Link")
+        otra_evento = agendaevento.objects.create(nombre="Consulta Link", veterinaria=otra_veterinaria)
+
+        response = self.client.get(reverse("reserva_publica_acceso", args=[otra_veterinaria.reserva_publica_token]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "vetnex-logo.svg")
+        self.assertNotContains(response, "PetSalud")
+
+        response = self.client.post(reverse("reserva_publica_acceso", args=[otra_veterinaria.reserva_publica_token]), {
+            "rut": otra_cliente.rut,
+            "email": otra_cliente.email,
+        })
+
+        self.assertRedirects(response, reverse("reserva_publica_nueva", args=[otra_veterinaria.reserva_publica_token]))
+
+        response = self.client.get(reverse("reserva_publica_nueva", args=[otra_veterinaria.reserva_publica_token]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "vetnex-logo.svg")
+        self.assertNotContains(response, "PetSalud")
+        self.assertContains(response, otra_evento.nombre)
+        self.assertContains(response, otra_mascota.nombre)
+        self.assertNotContains(response, self.evento.nombre)
+        self.assertNotContains(response, self.mascota.nombre)
 
 
 class DisponibilidadReservaTests(ReservaBaseMixin, TestCase):
@@ -717,6 +815,80 @@ class ReservaGestionTests(ReservaBaseMixin, TestCase):
         self.assertContains(response, pendiente.mascota.nombre)
         self.assertNotContains(response, "Toby")
 
+    def test_reserva_list_muestra_boton_iniciar_atencion(self):
+        obj = reserva.objects.create(
+            mascota=self.mascota,
+            evento=self.evento,
+            veterinaria=self.veterinaria,
+            fecha=self.manana,
+            hora_inicio=time(9, 0),
+            hora_fin=time(9, 30),
+            email_contacto="ana@example.com",
+        )
+
+        response = self.client.get(reverse("reserva_list"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, reverse("registrar_atencion", args=[self.cliente.id]))
+        self.assertContains(response, f"?reserva={obj.id}")
+
+    def test_registrar_atencion_desde_reserva_preselecciona_mascota(self):
+        obj = reserva.objects.create(
+            mascota=self.mascota,
+            evento=self.evento,
+            veterinaria=self.veterinaria,
+            fecha=self.manana,
+            hora_inicio=time(9, 0),
+            hora_fin=time(9, 30),
+            email_contacto="ana@example.com",
+        )
+
+        response = self.client.get(reverse("registrar_atencion", args=[self.cliente.id]) + f"?reserva={obj.id}")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["reserva_origen"], obj)
+        self.assertEqual(response.context["a_form"].initial["mascota"], self.mascota.id)
+        self.assertTrue(response.context["a_form"].fields["mascota"].disabled)
+        self.assertContains(response, "Iniciando atención desde la reserva")
+
+    def test_registrar_atencion_desde_reserva_de_otra_veterinaria_devuelve_404(self):
+        otra_veterinaria = veterinaria.objects.create(
+            nombre="Vet Alterna",
+            correo="alterna@example.com",
+            smtp_host="",
+            smtp_port=587,
+            smtp_usuario="",
+            smtp_password="",
+        )
+        otra_especie = especie.objects.create(nombre="Felino", veterinaria=otra_veterinaria)
+        otra_raza = raza.objects.create(nombre="Mestizo", especie=otra_especie)
+        otra_cliente = cliente.objects.create(
+            veterinaria=otra_veterinaria,
+            rut=f"11111111-{rut_dv('11111111')}",
+            nombre="Cliente Alterno",
+            email="alterno@example.com",
+            telefono="777777777",
+            direccion="Calle Alterna 123",
+            comuna=self.comuna,
+            estado=self.estado_cliente,
+            origen=OrigenCliente.SISTEMA,
+        )
+        otra_mascota = mascota.objects.create(cliente=otra_cliente, raza=otra_raza, nombre="Mishi")
+        otra_evento = agendaevento.objects.create(nombre="Consulta general", veterinaria=otra_veterinaria)
+        otra_reserva = reserva.objects.create(
+            mascota=otra_mascota,
+            evento=otra_evento,
+            veterinaria=otra_veterinaria,
+            fecha=self.manana,
+            hora_inicio=time(9, 0),
+            hora_fin=time(9, 30),
+            email_contacto="alterno@example.com",
+        )
+
+        response = self.client.get(reverse("registrar_atencion", args=[self.cliente.id]) + f"?reserva={otra_reserva.id}")
+
+        self.assertEqual(response.status_code, 404)
+
 
 class CitaGestionTests(ReservaBaseMixin, TestCase):
     @classmethod
@@ -993,6 +1165,19 @@ class TenantIsolationTests(ReservaBaseMixin, TestCase):
         self.assertContains(response, "https://cdn.example.com/master-logo.png")
         self.assertContains(response, "Nueva Veterinaria")
         self.assertContains(response, "Eliminar")
+        self.assertContains(response, str(self.veterinaria.reserva_publica_token))
+        self.assertNotContains(response, f"/reservas/publica/{self.veterinaria.id}/")
+        self.assertContains(response, "Copiar link")
+        self.assertContains(response, "QR")
+        self.assertContains(response, "publicQrModal")
+        self.assertContains(response, "/qr.svg")
+
+    def test_qr_publico_se_genera_en_svg(self):
+        response = self.client.get(reverse("reserva_publica_qr", args=[self.veterinaria.reserva_publica_token]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response["Content-Type"].startswith("image/svg+xml"))
+        self.assertContains(response, "<svg", html=False)
 
     def test_superuser_puede_eliminar_veterinaria_sin_dependencias(self):
         response = self.client.post(reverse("veterinaria_delete", args=[self.otra_veterinaria.id]))

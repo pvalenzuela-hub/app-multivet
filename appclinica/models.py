@@ -1,3 +1,5 @@
+import uuid
+
 from datetime import timedelta
 
 from django.conf import settings
@@ -466,6 +468,7 @@ class reserva(models.Model):
 class veterinaria(models.Model):
     nombre = models.CharField(max_length=150)
     logo = models.URLField(null=True, blank=True)
+    reserva_publica_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     correo = models.EmailField()
     correo_prueba = models.EmailField(null=True, blank=True)
     smtp_host = models.CharField(max_length=150, blank=True)
@@ -481,6 +484,11 @@ class veterinaria(models.Model):
 
     def __str__(self):
         return self.nombre
+
+    def save(self, *args, **kwargs):
+        if not self.reserva_publica_token:
+            self.reserva_publica_token = uuid.uuid4()
+        super().save(*args, **kwargs)
 
 
 class UsuarioVeterinaria(models.Model):

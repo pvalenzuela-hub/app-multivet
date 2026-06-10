@@ -1,7 +1,7 @@
 # urls.py ultima version 21:23
 from django.urls import path
 from .views import (
-    AppLoginView, AppLogoutView,
+    AppLoginView, AppLogoutView, root_redirect,
     cliente_list, cliente_create, cliente_update,
     mascota_update,
     registrar_atencion, atenciones_por_cliente, citas_por_cliente,
@@ -21,7 +21,7 @@ from .views import (
     agendaevento_delete, agendaeventohorario_list, agendaeventohorario_create,
     agendaeventohorario_update, agendaeventohorario_delete, agendabloqueo_list,
     agendabloqueo_create, agendabloqueo_update, agendabloqueo_delete,
-    reserva_list, reserva_update_estado, reserva_publica_acceso,
+    reserva_list, reserva_update_estado, reserva_publica_qr, reserva_publica_acceso,
     reserva_publica_cambiar_cliente, reserva_publica_nueva, reserva_publica_slots,
     reserva_publica_registro,
     reserva_publica_confirmacion,
@@ -31,16 +31,18 @@ from .views import (
 )
 
 urlpatterns = [
+    path("", root_redirect, name="home"),
     path("login/", AppLoginView.as_view(), name="login"),
     path("logout/", AppLogoutView.as_view(), name="logout"),
-    path("reservas/publica/", reserva_publica_acceso, name="reserva_publica_acceso"),
-    path("reservas/publica/registro/", reserva_publica_registro, name="reserva_publica_registro"),
-    path("reservas/publica/cambiar-cliente/", reserva_publica_cambiar_cliente, name="reserva_publica_cambiar_cliente"),
-    path("reservas/publica/nueva/", reserva_publica_nueva, name="reserva_publica_nueva"),
-    path("reservas/publica/horarios/", reserva_publica_slots, name="reserva_publica_slots"),
-    path("reservas/publica/confirmacion/<int:reserva_id>/", reserva_publica_confirmacion, name="reserva_publica_confirmacion"),
+    path("reservas/publica/<uuid:veterinaria_token>/qr.svg", reserva_publica_qr, name="reserva_publica_qr"),
+    path("reservas/publica/<uuid:veterinaria_token>/", reserva_publica_acceso, name="reserva_publica_acceso"),
+    path("reservas/publica/<uuid:veterinaria_token>/registro/", reserva_publica_registro, name="reserva_publica_registro"),
+    path("reservas/publica/<uuid:veterinaria_token>/cambiar-cliente/", reserva_publica_cambiar_cliente, name="reserva_publica_cambiar_cliente"),
+    path("reservas/publica/<uuid:veterinaria_token>/nueva/", reserva_publica_nueva, name="reserva_publica_nueva"),
+    path("reservas/publica/<uuid:veterinaria_token>/horarios/", reserva_publica_slots, name="reserva_publica_slots"),
+    path("reservas/publica/<uuid:veterinaria_token>/confirmacion/<int:reserva_id>/", reserva_publica_confirmacion, name="reserva_publica_confirmacion"),
 
-    path("", cliente_list, name="cliente_list"),
+    path("clientes/", cliente_list, name="cliente_list"),
     path("clientes/nuevo/", cliente_create, name="cliente_create"),
     path("clientes/<int:pk>/editar/", cliente_update, name="cliente_update"),
 

@@ -19,6 +19,7 @@
         <tr>
           <th>Nombre</th>
           <th>Correo</th>
+          <th>Link externo</th>
           <th>SMTP</th>
           <th>Estado</th>
           <th class="text-end">Acciones</th>
@@ -26,9 +27,28 @@
       </thead>
       <tbody>
         {% for item in items %}
-          <tr>
+            <tr>
             <td class="fw-semibold">{{ item.nombre }}</td>
             <td>{{ item.correo }}</td>
+            <td class="small text-break">
+              <a href="{{ item.public_reserva_url }}" target="_blank" rel="noopener">{{ item.public_reserva_url }}</a>
+              <div class="d-flex flex-wrap gap-2 mt-2">
+                <button type="button"
+                        class="btn btn-sm btn-outline-secondary js-copy-public-link"
+                        data-copy-link="{{ item.public_reserva_url }}">
+                  Copiar link
+                </button>
+                <button type="button"
+                        class="btn btn-sm btn-outline-primary js-open-public-qr"
+                        data-qr-src="{{ item.public_qr_url }}"
+                        data-qr-link="{{ item.public_reserva_url }}"
+                        data-qr-title="{{ item.nombre }}"
+                        data-bs-toggle="modal"
+                        data-bs-target="#publicQrModal">
+                  QR
+                </button>
+              </div>
+            </td>
             <td>{{ item.smtp_host }}:{{ item.smtp_port }}</td>
             <td>
               {% if active_id == item.id %}
@@ -53,10 +73,83 @@
             </td>
           </tr>
         {% empty %}
-          <tr><td colspan="5" class="text-center text-muted py-4">No hay veterinarias registradas.</td></tr>
+          <tr><td colspan="6" class="text-center text-muted py-4">No hay veterinarias registradas.</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 </div>
+
+<div class="modal fade" id="publicQrModal" tabindex="-1" aria-labelledby="publicQrModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="publicQrModalLabel">QR de reserva</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body text-center">
+        <img id="publicQrImage" src="" alt="QR de reserva" class="img-fluid rounded border mb-3" style="max-width: 320px;">
+        <div class="small text-break text-muted" id="publicQrLink"></div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const qrModal = document.getElementById('publicQrModal');
+    const qrImage = document.getElementById('publicQrImage');
+    const qrLink = document.getElementById('publicQrLink');
+    const qrTitle = document.getElementById('publicQrModalLabel');
+
+    if (qrModal) {
+      qrModal.addEventListener('show.bs.modal', function (event) {
+        const trigger = event.relatedTarget;
+        const src = trigger?.getAttribute('data-qr-src') || '';
+        const link = trigger?.getAttribute('data-qr-link') || '';
+        const title = trigger?.getAttribute('data-qr-title') || 'Reserva';
+
+        if (qrTitle) {
+          qrTitle.textContent = `QR de ${title}`;
+        }
+        if (qrImage) {
+          qrImage.src = src;
+          qrImage.alt = `QR de ${title}`;
+        }
+        if (qrLink) {
+          qrLink.textContent = link;
+        }
+      });
+    }
+
+    document.querySelectorAll('.js-copy-public-link').forEach((button) => {
+      button.addEventListener('click', async () => {
+        const link = button.getAttribute('data-copy-link') || '';
+        const originalText = button.textContent;
+
+        try {
+          await navigator.clipboard.writeText(link);
+          button.textContent = 'Copiado';
+        } catch (error) {
+          const textarea = document.createElement('textarea');
+          textarea.value = link;
+          textarea.setAttribute('readonly', 'readonly');
+          textarea.style.position = 'fixed';
+          textarea.style.left = '-9999px';
+          document.body.appendChild(textarea);
+          textarea.select();
+          document.execCommand('copy');
+          document.body.removeChild(textarea);
+          button.textContent = 'Copiado';
+        }
+
+        window.setTimeout(() => {
+          button.textContent = originalText;
+        }, 1500);
+      });
+    });
+  });
+</script>
 {% endblock %}

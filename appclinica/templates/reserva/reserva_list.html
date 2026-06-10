@@ -87,7 +87,14 @@
                 {% endif %}
               </td>
               <td>{{ x.observacion|default:""|truncatechars:70 }}</td>
-              <td class="text-end"><a class="btn btn-sm btn-outline-secondary" href="{% url 'reserva_update_estado' x.id %}">Gestionar</a></td>
+              <td class="text-end">
+                <div class="d-inline-flex gap-1 flex-wrap justify-content-end">
+                  {% if x.estado != 'cancelada' %}
+                    <a class="btn btn-sm btn-success" href="{% url 'registrar_atencion' x.mascota.cliente.id %}?reserva={{ x.id }}">Atención</a>
+                  {% endif %}
+                  <a class="btn btn-sm btn-outline-secondary" href="{% url 'reserva_update_estado' x.id %}">Gestionar</a>
+                </div>
+              </td>
             </tr>
             {% endfor %}
           </tbody>

@@ -5,24 +5,14 @@
 {% block content %}
 <div class="row justify-content-center">
   <div class="col-12 col-lg-7 col-xl-6">
-    <div class="text-center mb-4">
-      <div class="brand d-inline-flex text-start">
-        <img src="{% static 'img/vetnex-logo.svg' %}" alt="Vetnex" class="brand-logo">
-        <div class="lh-1">
-          <div class="brand-title">
-            <span class="brand-pet">Pet</span><span class="brand-salud">Salud</span>
-          </div>
-          <div class="brand-sub">CLÍNICA VETERINARIA</div>
-        </div>
-      </div>
-    </div>
+    {% include "reserva/_vetnex_brand.html" %}
 
     <div class="text-center mb-4">
       <h2 class="mb-1">Reserva de Hora</h2>
       <div class="text-muted">Ingrese su RUT y el email registrado para continuar</div>
     </div>
 
-    <form method="post" class="card shadow-sm">
+    <form method="post" action="{% url 'reserva_publica_acceso' veterinaria_token=veterinaria_token %}" class="card shadow-sm">
       {% csrf_token %}
       <div class="card-body p-4">
         {% if form.non_field_errors %}
@@ -54,7 +44,7 @@
       <div class="card-footer d-flex justify-content-end gap-2">
         {% if show_register and registro_initial %}
           <button class="btn btn-outline-secondary" type="submit">Volver a intentar</button>
-          <a class="btn btn-primary" href="{% url 'reserva_publica_registro' %}">Registrarme</a>
+          <a class="btn btn-primary" href="{% url 'reserva_publica_registro' veterinaria_token=veterinaria_token %}">Registrarme</a>
         {% else %}
           <button class="btn btn-primary" type="submit">Continuar</button>
         {% endif %}

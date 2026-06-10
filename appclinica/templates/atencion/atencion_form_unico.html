@@ -19,7 +19,15 @@
     </div>
   </div>
 
-  <form method="post" class="card shadow-sm">
+  {% if reserva_origen %}
+    <div class="alert alert-info">
+      Iniciando atención desde la reserva del {{ reserva_origen.fecha|date:"d-m-Y" }}
+      {{ reserva_origen.hora_inicio|time:"H:i" }} a {{ reserva_origen.hora_fin|time:"H:i" }}
+      para {{ reserva_origen.mascota.nombre }} ({{ reserva_origen.evento.nombre }}).
+    </div>
+  {% endif %}
+
+  <form method="post" action="{{ request.get_full_path }}" class="card shadow-sm">
     {% csrf_token %}
 
     <div class="card-body">

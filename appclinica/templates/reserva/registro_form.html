@@ -5,27 +5,17 @@
 {% block content %}
 <div class="row justify-content-center">
   <div class="col-12 col-xl-8">
-    <div class="text-center mb-4">
-      <div class="brand d-inline-flex text-start">
-        <img src="{% static 'img/vetnex-logo.svg' %}" alt="Vetnex" class="brand-logo">
-        <div class="lh-1">
-          <div class="brand-title">
-            <span class="brand-pet">Pet</span><span class="brand-salud">Salud</span>
-          </div>
-          <div class="brand-sub">CLINICA VETERINARIA</div>
-        </div>
-      </div>
-    </div>
+    {% include "reserva/_vetnex_brand.html" %}
 
     <div class="d-flex justify-content-between align-items-start mb-3 gap-2">
       <div>
         <h2 class="mb-0">Registro de Cliente y Mascota</h2>
         <div class="text-muted">Complete los datos para continuar con la reserva</div>
       </div>
-      <a class="btn btn-outline-secondary" href="{% url 'reserva_publica_acceso' %}">Volver</a>
+      <a class="btn btn-outline-secondary" href="{% url 'reserva_publica_acceso' veterinaria_token=veterinaria_token %}">Volver</a>
     </div>
 
-    <form method="post" class="card shadow-sm">
+    <form method="post" action="{% url 'reserva_publica_registro' veterinaria_token=veterinaria_token %}" class="card shadow-sm">
       {% csrf_token %}
       {{ form.origen }}
       <div class="card-body p-4">
@@ -91,7 +81,7 @@
         </div>
       </div>
       <div class="card-footer d-flex justify-content-end gap-2">
-        <a class="btn btn-outline-secondary" href="{% url 'reserva_publica_acceso' %}">Cancelar</a>
+        <a class="btn btn-outline-secondary" href="{% url 'reserva_publica_acceso' veterinaria_token=veterinaria_token %}">Cancelar</a>
         <button class="btn btn-primary" type="submit">Registrarme y Continuar</button>
       </div>
     </form>

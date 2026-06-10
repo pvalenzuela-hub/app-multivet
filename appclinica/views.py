@@ -1,3 +1,5 @@
+import io
+
 from datetime import date, timedelta
 
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -9,9 +11,13 @@ from django.core.mail import EmailMessage, get_connection
 from django.db import connection, transaction, IntegrityError
 from django.db.models import Q, Prefetch, Count, Case, When, Value, IntegerField, CharField
 from django.db.models.functions import TruncDate
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.utils.http import url_has_allowed_host_and_scheme
+
+import qrcode
+from qrcode.image.svg import SvgImage
 
 from .forms import (
     ClienteForm, MascotaForm, AtencionForm,
@@ -49,9 +55,10 @@ from django.contrib.postgres.aggregates import StringAgg
 
 
 ESTADO_CITA_DEFAULT_ID = 1  # <<-- el estado por defecto requerido
-RESERVA_CLIENTE_SESSION_KEY = "reserva_publica_cliente_id"
-RESERVA_DRAFT_SESSION_KEY = "reserva_publica_draft"
-RESERVA_REGISTRO_SESSION_KEY = "reserva_publica_registro"
+RESERVA_PUBLICA_SESSION_PREFIX = "reserva_publica"
+RESERVA_PUBLICA_CLIENTE_SUFFIX = "cliente_id"
+RESERVA_PUBLICA_DRAFT_SUFFIX = "draft"
+RESERVA_PUBLICA_REGISTRO_SUFFIX = "registro"
 
 
 def current_veterinaria(request):
@@ -87,24 +94,49 @@ def superusuario_required(view_func):
     return wrapper
 
 
-def _get_reserva_cliente_publico(request):
-    master_vet = get_master_veterinaria()
-    cliente_id = request.session.get(RESERVA_CLIENTE_SESSION_KEY)
+def _reserva_publica_session_key(veterinaria_token, suffix):
+    return f"{RESERVA_PUBLICA_SESSION_PREFIX}:{veterinaria_token}:{suffix}"
+
+
+def _get_reserva_cliente_publico(request, veterinaria_token):
+    master_vet = _get_reserva_publica_veterinaria(request, veterinaria_token)
+    cliente_id = request.session.get(_reserva_publica_session_key(veterinaria_token, RESERVA_PUBLICA_CLIENTE_SUFFIX))
     if not cliente_id:
         return None
     return cliente.objects.filter(pk=cliente_id, veterinaria=master_vet).first()
 
 
-def _clear_reserva_publica_session(request, clear_cliente=False):
-    request.session.pop(RESERVA_DRAFT_SESSION_KEY, None)
-    request.session.pop(RESERVA_REGISTRO_SESSION_KEY, None)
+def _clear_reserva_publica_session(request, veterinaria_token, clear_cliente=False):
+    request.session.pop(_reserva_publica_session_key(veterinaria_token, RESERVA_PUBLICA_DRAFT_SUFFIX), None)
+    request.session.pop(_reserva_publica_session_key(veterinaria_token, RESERVA_PUBLICA_REGISTRO_SUFFIX), None)
     if clear_cliente:
-        request.session.pop(RESERVA_CLIENTE_SESSION_KEY, None)
+        request.session.pop(_reserva_publica_session_key(veterinaria_token, RESERVA_PUBLICA_CLIENTE_SUFFIX), None)
 
 
-def _get_reserva_publica_draft(request, cliente_obj):
-    master_vet = get_master_veterinaria()
-    draft = request.session.get(RESERVA_DRAFT_SESSION_KEY)
+def _get_reserva_publica_veterinaria(request, veterinaria_token=None):
+    if veterinaria_token is not None:
+        return get_object_or_404(veterinaria, reserva_publica_token=veterinaria_token)
+    return get_master_veterinaria()
+
+
+def _build_reserva_publica_qr_svg(public_url: str) -> str:
+    qr = qrcode.QRCode(
+        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        box_size=10,
+        border=4,
+    )
+    qr.add_data(public_url)
+    qr.make(fit=True)
+
+    image = qr.make_image(image_factory=SvgImage)
+    buffer = io.BytesIO()
+    image.save(buffer)
+    return buffer.getvalue().decode("utf-8")
+
+
+def _get_reserva_publica_draft(request, cliente_obj, veterinaria_token):
+    master_vet = _get_reserva_publica_veterinaria(request, veterinaria_token)
+    draft = request.session.get(_reserva_publica_session_key(veterinaria_token, RESERVA_PUBLICA_DRAFT_SUFFIX))
     if not draft:
         return None
 
@@ -113,7 +145,7 @@ def _get_reserva_publica_draft(request, cliente_obj):
         pet = mascota.objects.get(pk=draft["mascota_id"], cliente=cliente_obj, cliente__veterinaria=master_vet)
         evento_obj = agendaevento.objects.get(pk=draft["evento_id"], activo=True, veterinaria=master_vet)
     except (KeyError, TypeError, ValueError, mascota.DoesNotExist, agendaevento.DoesNotExist):
-        request.session.pop(RESERVA_DRAFT_SESSION_KEY, None)
+        request.session.pop(_reserva_publica_session_key(veterinaria_token, RESERVA_PUBLICA_DRAFT_SUFFIX), None)
         return None
 
     return {
@@ -226,6 +258,12 @@ class AppLoginView(LoginView):
 
 class AppLogoutView(LogoutView):
     next_page = reverse_lazy("login")
+
+
+def root_redirect(request):
+    if request.user.is_authenticated:
+        return redirect("dashboard_panel")
+    return redirect("login")
 
 # -------------------------
 # Grilla clientes con filtros
@@ -476,16 +514,31 @@ def citas_por_cliente(request, cliente_id):
 def registrar_atencion(request, cliente_id):
     vet = current_veterinaria(request)
     c = get_object_or_404(cliente, pk=cliente_id, veterinaria=vet)
+    reserva_origen = None
+
+    reserva_id = (request.GET.get("reserva") or "").strip()
+    if reserva_id.isdigit():
+        reserva_origen = get_object_or_404(
+            reserva.objects.select_related("mascota", "mascota__cliente", "evento"),
+            pk=int(reserva_id),
+            veterinaria=vet,
+            mascota__cliente=c,
+        )
 
     # Mascotas disponibles solo del cliente seleccionado
     mascotas_cliente = mascota.objects.filter(cliente=c).order_by("nombre")
+    initial = {}
+    if reserva_origen is not None:
+        initial["mascota"] = reserva_origen.mascota_id
 
     if request.method == "POST":
         # Pasamos cliente para que:
         # - filtre mascotas automáticamente
         # - el select muestre solo nombre (label_from_instance)
-        a_form = AtencionForm(request.POST, cliente=c, veterinaria=vet)
+        a_form = AtencionForm(request.POST, cliente=c, veterinaria=vet, initial=initial)
         a_form.fields["mascota"].queryset = mascotas_cliente  # refuerzo
+        if reserva_origen is not None:
+            a_form.fields["mascota"].disabled = True
 
         d_formset = AtencionDetalleFormSet(request.POST, prefix="det", form_kwargs={"veterinaria": vet})
         c_formset = CitaFormSet(request.POST, prefix="cita", form_kwargs={"veterinaria": vet})
@@ -524,8 +577,10 @@ def registrar_atencion(request, cliente_id):
             return redirect("atenciones_por_cliente", cliente_id=c.id)
 
     else:
-        a_form = AtencionForm(cliente=c, veterinaria=vet)
+        a_form = AtencionForm(cliente=c, veterinaria=vet, initial=initial)
         a_form.fields["mascota"].queryset = mascotas_cliente  # refuerzo
+        if reserva_origen is not None:
+            a_form.fields["mascota"].disabled = True
 
         d_formset = AtencionDetalleFormSet(prefix="det", form_kwargs={"veterinaria": vet})
         c_formset = CitaFormSet(prefix="cita", form_kwargs={"veterinaria": vet})
@@ -535,6 +590,7 @@ def registrar_atencion(request, cliente_id):
         "a_form": a_form,
         "d_formset": d_formset,
         "c_formset": c_formset,
+        "reserva_origen": reserva_origen,
     }
     return render(request, "atencion/atencion_form_unico.html", context)
 
@@ -1553,8 +1609,19 @@ def cita_check_global(request, cita_id: int):
     return redirect("citas_pendientes_filtrado")
 
 
-def reserva_publica_acceso(request):
-    master_vet = veterinaria.objects.order_by("id").first()
+def reserva_publica_qr(request, veterinaria_token):
+    vet = get_object_or_404(veterinaria, reserva_publica_token=veterinaria_token)
+    public_url = request.build_absolute_uri(reverse("reserva_publica_acceso", args=[vet.reserva_publica_token]))
+    svg = _build_reserva_publica_qr_svg(public_url)
+
+    response = HttpResponse(svg, content_type="image/svg+xml")
+    response["Cache-Control"] = "public, max-age=86400"
+    return response
+
+
+def reserva_publica_acceso(request, veterinaria_token=None):
+    master_vet = _get_reserva_publica_veterinaria(request, veterinaria_token)
+    veterinaria_token = master_vet.reserva_publica_token
     form = ReservaAccesoForm(request.POST or None)
     show_register = False
     registro_initial = None
@@ -1573,33 +1640,35 @@ def reserva_publica_acceso(request):
             if cliente_obj:
                 cliente_obj.email = email
                 cliente_obj.save(update_fields=["email"])
-                _clear_reserva_publica_session(request)
-                request.session[RESERVA_CLIENTE_SESSION_KEY] = cliente_obj.id
-                return redirect("reserva_publica_nueva")
+                _clear_reserva_publica_session(request, veterinaria_token)
+                request.session[_reserva_publica_session_key(veterinaria_token, RESERVA_PUBLICA_CLIENTE_SUFFIX)] = cliente_obj.id
+                return redirect("reserva_publica_nueva", veterinaria_token=veterinaria_token)
 
             show_register = True
             registro_initial = {"rut": rut, "email": email}
-            request.session[RESERVA_REGISTRO_SESSION_KEY] = registro_initial
+            request.session[_reserva_publica_session_key(veterinaria_token, RESERVA_PUBLICA_REGISTRO_SUFFIX)] = registro_initial
             form.add_error(None, "No existe un cliente registrado con esos datos.")
         else:
-            _clear_reserva_publica_session(request)
-            request.session[RESERVA_CLIENTE_SESSION_KEY] = cliente_obj.id
-            return redirect("reserva_publica_nueva")
+            _clear_reserva_publica_session(request, veterinaria_token)
+            request.session[_reserva_publica_session_key(veterinaria_token, RESERVA_PUBLICA_CLIENTE_SUFFIX)] = cliente_obj.id
+            return redirect("reserva_publica_nueva", veterinaria_token=veterinaria_token)
 
     return render(request, "reserva/acceso_form.html", {
         "form": form,
         "show_register": show_register,
         "registro_initial": registro_initial,
+        "veterinaria_token": veterinaria_token,
         "hide_sidebar": True,
     })
 
 
-def reserva_publica_registro(request):
-    master_vet = get_master_veterinaria()
-    registro_data = request.session.get(RESERVA_REGISTRO_SESSION_KEY, {}).copy()
+def reserva_publica_registro(request, veterinaria_token=None):
+    master_vet = _get_reserva_publica_veterinaria(request, veterinaria_token)
+    veterinaria_token = master_vet.reserva_publica_token
+    registro_data = request.session.get(_reserva_publica_session_key(veterinaria_token, RESERVA_PUBLICA_REGISTRO_SUFFIX), {}).copy()
     if not registro_data.get("rut") or not registro_data.get("email"):
         messages.error(request, "Primero debe validar su RUT y email para registrarse.")
-        return redirect("reserva_publica_acceso")
+        return redirect("reserva_publica_acceso", veterinaria_token=veterinaria_token)
 
     form = ReservaPublicaRegistroForm(request.POST or None, veterinaria=master_vet)
 
@@ -1611,9 +1680,9 @@ def reserva_publica_registro(request):
         if existente:
             existente.email = email
             existente.save(update_fields=["email"])
-            _clear_reserva_publica_session(request)
-            request.session[RESERVA_CLIENTE_SESSION_KEY] = existente.id
-            return redirect("reserva_publica_nueva")
+            _clear_reserva_publica_session(request, veterinaria_token)
+            request.session[_reserva_publica_session_key(veterinaria_token, RESERVA_PUBLICA_CLIENTE_SUFFIX)] = existente.id
+            return redirect("reserva_publica_nueva", veterinaria_token=veterinaria_token)
 
         with transaction.atomic():
             cliente_obj = cliente.objects.create(
@@ -1634,44 +1703,48 @@ def reserva_publica_registro(request):
                 fechanac=form.cleaned_data["fechanac"],
             )
 
-        _clear_reserva_publica_session(request)
-        request.session[RESERVA_CLIENTE_SESSION_KEY] = cliente_obj.id
+        _clear_reserva_publica_session(request, veterinaria_token)
+        request.session[_reserva_publica_session_key(veterinaria_token, RESERVA_PUBLICA_CLIENTE_SUFFIX)] = cliente_obj.id
         messages.success(request, "Cliente y mascota registrados correctamente.")
-        return redirect("reserva_publica_nueva")
+        return redirect("reserva_publica_nueva", veterinaria_token=veterinaria_token)
 
     return render(request, "reserva/registro_form.html", {
         "form": form,
         "rut": registro_data["rut"],
         "email": registro_data["email"],
+        "veterinaria_token": veterinaria_token,
         "hide_sidebar": True,
     })
 
 
-def reserva_publica_cambiar_cliente(request):
-    _clear_reserva_publica_session(request, clear_cliente=True)
-    return redirect("reserva_publica_acceso")
+def reserva_publica_cambiar_cliente(request, veterinaria_token=None):
+    master_vet = _get_reserva_publica_veterinaria(request, veterinaria_token)
+    veterinaria_token = master_vet.reserva_publica_token
+    _clear_reserva_publica_session(request, veterinaria_token, clear_cliente=True)
+    return redirect("reserva_publica_acceso", veterinaria_token=veterinaria_token)
 
 
-def reserva_publica_nueva(request):
-    master_vet = get_master_veterinaria()
-    cliente_obj = _get_reserva_cliente_publico(request)
+def reserva_publica_nueva(request, veterinaria_token=None):
+    master_vet = _get_reserva_publica_veterinaria(request, veterinaria_token)
+    veterinaria_token = master_vet.reserva_publica_token
+    cliente_obj = _get_reserva_cliente_publico(request, veterinaria_token)
     if not cliente_obj:
         messages.error(request, "Primero debe validar su RUT y email para continuar.")
-        return redirect("reserva_publica_acceso")
+        return redirect("reserva_publica_acceso", veterinaria_token=veterinaria_token)
 
-    draft = request.session.get(RESERVA_DRAFT_SESSION_KEY, {})
+    draft = request.session.get(_reserva_publica_session_key(veterinaria_token, RESERVA_PUBLICA_DRAFT_SUFFIX), {})
 
     if request.method == "POST":
         form = ReservaPublicaBusquedaForm(request.POST, cliente_obj=cliente_obj, veterinaria=master_vet)
         if form.is_valid():
-            request.session[RESERVA_DRAFT_SESSION_KEY] = {
+            request.session[_reserva_publica_session_key(veterinaria_token, RESERVA_PUBLICA_DRAFT_SUFFIX)] = {
                 "mascota_id": form.cleaned_data["mascota"].id,
                 "evento_id": form.cleaned_data["evento"].id,
                 "fecha": form.cleaned_data["fecha"].isoformat(),
                 "email_contacto": form.cleaned_data["email_contacto"],
                 "observacion": form.cleaned_data["observacion"],
             }
-            return redirect("reserva_publica_slots")
+            return redirect("reserva_publica_slots", veterinaria_token=veterinaria_token)
     else:
         initial = {}
         if draft:
@@ -1688,21 +1761,23 @@ def reserva_publica_nueva(request):
         "form": form,
         "cliente": cliente_obj,
         "ventana_dias": VENTANA_RESERVA_DIAS,
+        "veterinaria_token": veterinaria_token,
         "hide_sidebar": True,
     })
 
 
-def reserva_publica_slots(request):
-    master_vet = get_master_veterinaria()
-    cliente_obj = _get_reserva_cliente_publico(request)
+def reserva_publica_slots(request, veterinaria_token=None):
+    master_vet = _get_reserva_publica_veterinaria(request, veterinaria_token)
+    veterinaria_token = master_vet.reserva_publica_token
+    cliente_obj = _get_reserva_cliente_publico(request, veterinaria_token)
     if not cliente_obj:
         messages.error(request, "Primero debe validar su RUT y email para continuar.")
-        return redirect("reserva_publica_acceso")
+        return redirect("reserva_publica_acceso", veterinaria_token=veterinaria_token)
 
-    draft = _get_reserva_publica_draft(request, cliente_obj)
+    draft = _get_reserva_publica_draft(request, cliente_obj, veterinaria_token)
     if not draft:
         messages.error(request, "Debe completar primero los datos de la reserva.")
-        return redirect("reserva_publica_nueva")
+        return redirect("reserva_publica_nueva", veterinaria_token=veterinaria_token)
 
     slots = obtener_slots_disponibles(draft["evento"], draft["fecha"])
     form = ReservaSlotForm(request.POST or None, slots=slots)
@@ -1710,7 +1785,7 @@ def reserva_publica_slots(request):
     if request.method == "POST":
         if not slots:
             messages.error(request, "No hay horarios disponibles para la fecha seleccionada.")
-            return redirect("reserva_publica_nueva")
+            return redirect("reserva_publica_nueva", veterinaria_token=veterinaria_token)
 
         if form.is_valid():
             horario = next((slot for slot in slots if slot.id == form.cleaned_data["horario_id"]), None)
@@ -1734,25 +1809,27 @@ def reserva_publica_slots(request):
                     _add_validation_error_to_form(form, exc)
                 else:
                     obj.save()
-                    request.session.pop(RESERVA_DRAFT_SESSION_KEY, None)
+                    request.session.pop(_reserva_publica_session_key(veterinaria_token, RESERVA_PUBLICA_DRAFT_SUFFIX), None)
                     messages.success(request, "Reserva creada correctamente.")
-                    return redirect("reserva_publica_confirmacion", reserva_id=obj.id)
+                    return redirect("reserva_publica_confirmacion", veterinaria_token=veterinaria_token, reserva_id=obj.id)
 
     return render(request, "reserva/slots_list.html", {
         "cliente": cliente_obj,
         "draft": draft,
         "slots": slots,
         "form": form,
+        "veterinaria_token": veterinaria_token,
         "hide_sidebar": True,
     })
 
 
-def reserva_publica_confirmacion(request, reserva_id):
-    master_vet = get_master_veterinaria()
-    cliente_obj = _get_reserva_cliente_publico(request)
+def reserva_publica_confirmacion(request, veterinaria_token=None, reserva_id=None):
+    master_vet = _get_reserva_publica_veterinaria(request, veterinaria_token)
+    veterinaria_token = master_vet.reserva_publica_token
+    cliente_obj = _get_reserva_cliente_publico(request, veterinaria_token)
     if not cliente_obj:
         messages.error(request, "Primero debe validar su RUT y email para continuar.")
-        return redirect("reserva_publica_acceso")
+        return redirect("reserva_publica_acceso", veterinaria_token=veterinaria_token)
 
     obj = get_object_or_404(
         reserva.objects.select_related("mascota", "mascota__cliente", "evento"),
@@ -1764,6 +1841,7 @@ def reserva_publica_confirmacion(request, reserva_id):
     return render(request, "reserva/confirmacion.html", {
         "cliente": cliente_obj,
         "reserva": obj,
+        "veterinaria_token": veterinaria_token,
         "hide_sidebar": True,
     })
 
@@ -2262,6 +2340,15 @@ def veterinaria_list(request):
         vet = current_veterinaria(request)
         veterinarias = veterinaria.objects.filter(pk=vet.pk).order_by("nombre", "id")
         active_id = vet.id
+
+    for item in veterinarias:
+        item.public_reserva_url = request.build_absolute_uri(
+            reverse("reserva_publica_acceso", args=[item.reserva_publica_token])
+        )
+        item.public_qr_url = request.build_absolute_uri(
+            reverse("reserva_publica_qr", args=[item.reserva_publica_token])
+        )
+
     return render(request, "veterinaria/veterinaria_list.html", {
         "items": veterinarias,
         "active_id": active_id,

@@ -3,24 +3,14 @@
 {% block title %}Horarios Disponibles{% endblock %}
 
 {% block content %}
-<div class="text-center mb-4">
-  <div class="brand d-inline-flex text-start">
-    <img src="{% static 'img/vetnex-logo.svg' %}" alt="Vetnex" class="brand-logo">
-    <div class="lh-1">
-      <div class="brand-title">
-        <span class="brand-pet">Pet</span><span class="brand-salud">Salud</span>
-      </div>
-      <div class="brand-sub">CLÍNICA VETERINARIA</div>
-    </div>
-  </div>
-</div>
+{% include "reserva/_vetnex_brand.html" %}
 
 <div class="d-flex justify-content-between align-items-start mb-3 gap-2">
   <div>
     <h2 class="mb-0">Horarios Disponibles</h2>
     <div class="text-muted">Seleccione un horario para confirmar su reserva</div>
   </div>
-  <a class="btn btn-outline-secondary" href="{% url 'reserva_publica_nueva' %}">Volver a editar</a>
+  <a class="btn btn-outline-secondary" href="{% url 'reserva_publica_nueva' veterinaria_token=veterinaria_token %}">Volver a editar</a>
 </div>
 
 <div class="card shadow-sm mb-3">
@@ -59,7 +49,7 @@
   </div>
 </div>
 
-<form method="post" class="card shadow-sm">
+<form method="post" action="{% url 'reserva_publica_slots' veterinaria_token=veterinaria_token %}" class="card shadow-sm">
   {% csrf_token %}
   <div class="card-body">
     {% if form.non_field_errors %}

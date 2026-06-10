@@ -3,17 +3,7 @@
 {% block title %}Reserva Confirmada{% endblock %}
 
 {% block content %}
-<div class="text-center mb-4">
-  <div class="brand d-inline-flex text-start">
-    <img src="{% static 'img/vetnex-logo.svg' %}" alt="Vetnex" class="brand-logo">
-    <div class="lh-1">
-      <div class="brand-title">
-        <span class="brand-pet">Pet</span><span class="brand-salud">Salud</span>
-      </div>
-      <div class="brand-sub">CLÍNICA VETERINARIA</div>
-    </div>
-  </div>
-</div>
+{% include "reserva/_vetnex_brand.html" %}
 
 <div class="row justify-content-center">
   <div class="col-12 col-lg-8">
@@ -54,8 +44,8 @@
         </div>
       </div>
       <div class="card-footer d-flex justify-content-end gap-2">
-        <a class="btn btn-outline-secondary" href="{% url 'reserva_publica_cambiar_cliente' %}">Salir</a>
-        <a class="btn btn-primary" href="{% url 'reserva_publica_nueva' %}">Nueva Reserva</a>
+        <a class="btn btn-outline-secondary" href="{% url 'reserva_publica_cambiar_cliente' veterinaria_token=veterinaria_token %}">Salir</a>
+        <a class="btn btn-primary" href="{% url 'reserva_publica_nueva' veterinaria_token=veterinaria_token %}">Nueva Reserva</a>
       </div>
     </div>
   </div>
