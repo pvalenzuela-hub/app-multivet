@@ -21,6 +21,7 @@
 - El superuser puede cambiar la veterinaria activa desde el selector del sidebar y ese cambio se persiste como default.
 - Los flujos publicos de reserva siguen anclados a la veterinaria master; quedan fuera de esta ola.
 - Para una base de produccion usa `python manage.py seed_production` despues de `migrate`; acepta `--logo-url`, `--nombre` y credenciales SMTP para dejar la veterinaria base lista sin los datos demo.
+- El comando `seed_production` es idempotente: puedes volver a correrlo sin duplicar la veterinaria base.
 - Si no pasas `--logo-url`, el comando usa `SEED_VETERINARIA_LOGO_URL`, `PUBLIC_SITE_URL` o un logo placeholder seguro.
 
 ## Nota
