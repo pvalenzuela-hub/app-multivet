@@ -30,6 +30,7 @@ from .models import (
     cliente, mascota, atencion, atenciondetalle, cita, especie, control, raza, prestacion, comuna,
     estadocliente, estadocita,
     agendaevento, agendaeventohorario, agendabloqueo, reserva, promocion, veterinaria,
+    EstadoReserva,
     VENTANA_RESERVA_DIAS, obtener_slots_disponibles, OrigenCliente,
 )
 from .tenancy import (
@@ -1431,6 +1432,31 @@ def dashboard_panel(request):
         "agenda_reservas_14d": agenda_reservas_14d,
     }
     return render(request, "dashboard/panel.html", context)
+
+
+@login_required
+def agenda_hoy(request):
+    vet = current_veterinaria(request)
+    today = timezone.localdate()
+
+    reservas_hoy = list(
+        reserva.objects
+        .filter(veterinaria=vet, fecha=today)
+        .select_related("mascota__cliente", "evento")
+        .order_by("hora_inicio", "mascota__nombre")
+    )
+    reservas_pendientes_hoy = [x for x in reservas_hoy if x.estado == EstadoReserva.PENDIENTE]
+    reservas_confirmadas_hoy_total = sum(1 for x in reservas_hoy if x.estado == EstadoReserva.CONFIRMADA)
+    reservas_canceladas_hoy_total = sum(1 for x in reservas_hoy if x.estado == EstadoReserva.CANCELADA)
+
+    return render(request, "agenda/agenda_hoy.html", {
+        "today": today,
+        "reservas_hoy_total": len(reservas_hoy),
+        "reservas_pendientes_hoy": reservas_pendientes_hoy,
+        "reservas_pendientes_hoy_total": len(reservas_pendientes_hoy),
+        "reservas_confirmadas_hoy_total": reservas_confirmadas_hoy_total,
+        "reservas_canceladas_hoy_total": reservas_canceladas_hoy_total,
+    })
 
 
 

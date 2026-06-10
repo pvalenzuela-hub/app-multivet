@@ -15,6 +15,7 @@ from .models import (
     agendabloqueo,
     agendaevento,
     agendaeventohorario,
+    EstadoReserva,
     cliente,
     comuna,
     cita,
@@ -121,8 +122,8 @@ class LoginTemplateTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "vetnex-logo.svg")
         self.assertContains(response, "alt=\"Vetnex\"")
-        self.assertContains(response, "Gestioná tu clínica desde un solo lugar.")
-        self.assertContains(response, "Ingresá al panel")
+        self.assertContains(response, "Controla tu veterinaria")
+        self.assertContains(response, "Usá tu RUT y contraseña")
 
     def test_login_y_home_renderizan_logo(self):
         user = get_user_model().objects.create_user(username="login_smoke", password="secret123")
@@ -135,6 +136,16 @@ class LoginTemplateTests(TestCase):
         self.assertEqual(home_response.status_code, 200)
         self.assertContains(login_response, "vetnex-logo.svg")
         self.assertContains(home_response, "vetnex-logo.svg")
+
+    def test_logout_en_home_se_renderiza_como_post(self):
+        user = get_user_model().objects.create_user(username="logout_smoke", password="secret123")
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("cliente_list"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'href="/logout/"')
+        self.assertEqual(response.content.decode().count('action="/logout/"'), 3)
 
 
 class EstadoCatalogoTests(ReservaBaseMixin, TestCase):
@@ -664,6 +675,47 @@ class ReservaGestionTests(ReservaBaseMixin, TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["total_reservas"], 1)
         self.assertIn(vigente, response.context["agenda_reservas_14d"][1]["items"])
+
+    def test_agenda_hoy_muestra_solo_reservas_pendientes(self):
+        pendiente = reserva.objects.create(
+            mascota=self.mascota,
+            evento=self.evento,
+            veterinaria=self.veterinaria,
+            fecha=self.hoy,
+            hora_inicio=time(9, 0),
+            hora_fin=time(9, 30),
+            email_contacto="ana@example.com",
+        )
+        reserva.objects.create(
+            mascota=self.otra_mascota,
+            evento=self.evento,
+            veterinaria=self.veterinaria,
+            fecha=self.hoy,
+            hora_inicio=time(10, 0),
+            hora_fin=time(10, 30),
+            email_contacto="beto@example.com",
+            estado=EstadoReserva.CONFIRMADA,
+        )
+        reserva.objects.create(
+            mascota=self.otra_mascota,
+            evento=self.evento,
+            veterinaria=self.veterinaria,
+            fecha=self.hoy,
+            hora_inicio=time(11, 0),
+            hora_fin=time(11, 30),
+            email_contacto="beto@example.com",
+            estado=EstadoReserva.CANCELADA,
+        )
+
+        response = self.client.get(reverse("agenda_hoy"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["reservas_hoy_total"], 3)
+        self.assertEqual(response.context["reservas_pendientes_hoy_total"], 1)
+        self.assertEqual(response.context["reservas_confirmadas_hoy_total"], 1)
+        self.assertEqual(response.context["reservas_canceladas_hoy_total"], 1)
+        self.assertContains(response, pendiente.mascota.nombre)
+        self.assertNotContains(response, "Toby")
 
 
 class CitaGestionTests(ReservaBaseMixin, TestCase):

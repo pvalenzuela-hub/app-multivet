@@ -125,7 +125,10 @@
         {% endif %}
       </div>
 
-      <a class="btn btn-outline-light" href="{% url 'logout' %}">Salir</a>
+      <form method="post" action="{% url 'logout' %}" class="m-0">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-outline-light">Salir</button>
+      </form>
     </div>
   </nav>
 
@@ -174,6 +177,9 @@
       <hr>
       <div class="small text-muted mb-2">Agenda</div>
       <nav class="nav nav-pills flex-column gap-1">
+        <a class="nav-link {% if request.resolver_match.url_name == 'agenda_hoy' %}active{% endif %}" href="{% url 'agenda_hoy' %}">
+          Agenda de hoy
+        </a>
         <a class="nav-link {% if request.resolver_match.url_name == 'agendaevento_list' %}active{% endif %}" href="{% url 'agendaevento_list' %}">Eventos Reservables</a>
         <a class="nav-link {% if request.resolver_match.url_name == 'agendabloqueo_list' %}active{% endif %}" href="{% url 'agendabloqueo_list' %}">Bloqueos</a>
       </nav>
@@ -237,6 +243,7 @@
           <a class="nav-link {% if request.resolver_match.url_name == 'ficha_clinica_buscar' %}active{% endif %}" href="{% url 'ficha_clinica_buscar' %}">Ficha Clínica</a>
           <a class="nav-link {% if request.resolver_match.url_name == 'reserva_list' %}active{% endif %}" href="{% url 'reserva_list' %}">Reservas</a>
           <a class="nav-link {% if request.resolver_match.url_name == 'promocion_list' %}active{% endif %}" href="{% url 'promocion_list' %}">Promociones</a>
+          <a class="nav-link {% if request.resolver_match.url_name == 'agenda_hoy' %}active{% endif %}" href="{% url 'agenda_hoy' %}">Agenda de hoy</a>
           <a class="nav-link {% if request.resolver_match.url_name == 'agendaevento_list' %}active{% endif %}" href="{% url 'agendaevento_list' %}">Eventos Reservables</a>
           <a class="nav-link {% if request.resolver_match.url_name == 'agendabloqueo_list' %}active{% endif %}" href="{% url 'agendabloqueo_list' %}">Bloqueos</a>
           {% if es_superusuario %}
@@ -262,7 +269,10 @@
               <button class="btn btn-sm btn-primary w-100" type="submit">Usar</button>
             </form>
           {% endif %}
-          <a class="nav-link" href="{% url 'logout' %}">Salir</a>
+          <form method="post" action="{% url 'logout' %}" class="mt-2">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-link nav-link p-0 text-start w-100">Salir</button>
+          </form>
         </div>
       </div>
     </div>
