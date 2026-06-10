@@ -12,6 +12,8 @@ from .views import (
     raza_list, raza_delete, raza_create, raza_update,
     prestacion_list, prestacion_create, prestacion_delete, prestacion_update,
     control_list, control_create, control_delete, control_update, cliente_detail,
+    estadocliente_list, estadocliente_create, estadocliente_update, estadocliente_delete,
+    estadocita_list, estadocita_create, estadocita_update, estadocita_delete,
     cita_delete, atencion_delete, mascota_delete_confirm, cliente_delete_confirm,
     dashboard_panel, atencion_update, atenciondetalle_update, atenciondetalle_delete,
     cita_update_global, cita_delete_global, citas_pendientes_filtrado,
@@ -105,6 +107,16 @@ urlpatterns = [
     path("catalogo/controles/nuevo/", control_create, name="control_create"),
     path("catalogo/controles/<int:pk>/editar/", control_update, name="control_update"),
     path("catalogo/controles/<int:pk>/eliminar/", control_delete, name="control_delete"),
+
+    # Catálogo - Estados
+    path("catalogo/estados-clientes/", estadocliente_list, name="estadocliente_list"),
+    path("catalogo/estados-clientes/nuevo/", estadocliente_create, name="estadocliente_create"),
+    path("catalogo/estados-clientes/<int:pk>/editar/", estadocliente_update, name="estadocliente_update"),
+    path("catalogo/estados-clientes/<int:pk>/eliminar/", estadocliente_delete, name="estadocliente_delete"),
+    path("catalogo/estados-citas/", estadocita_list, name="estadocita_list"),
+    path("catalogo/estados-citas/nuevo/", estadocita_create, name="estadocita_create"),
+    path("catalogo/estados-citas/<int:pk>/editar/", estadocita_update, name="estadocita_update"),
+    path("catalogo/estados-citas/<int:pk>/eliminar/", estadocita_delete, name="estadocita_delete"),
 
     path("agenda/eventos/", agendaevento_list, name="agendaevento_list"),
     path("agenda/eventos/nuevo/", agendaevento_create, name="agendaevento_create"),

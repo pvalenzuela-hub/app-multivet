@@ -184,6 +184,10 @@
         <a class="nav-link" href="{% url 'raza_list' %}">Raza</a>
         <a class="nav-link" href="{% url 'prestacion_list' %}">Prestaciones</a>
         <a class="nav-link" href="{% url 'control_list' %}">Controles</a>
+        {% if es_superusuario %}
+          <a class="nav-link {% if request.resolver_match.url_name == 'estadocliente_list' %}active{% endif %}" href="{% url 'estadocliente_list' %}">Estados Cliente</a>
+          <a class="nav-link {% if request.resolver_match.url_name == 'estadocita_list' %}active{% endif %}" href="{% url 'estadocita_list' %}">Estados Cita</a>
+        {% endif %}
         {% if es_administrador %}
           <a class="nav-link {% if request.resolver_match.url_name == 'veterinaria_list' %}active{% endif %}" href="{% url 'veterinaria_list' %}">Datos Veterinaria</a>
         {% endif %}
@@ -235,6 +239,10 @@
           <a class="nav-link {% if request.resolver_match.url_name == 'promocion_list' %}active{% endif %}" href="{% url 'promocion_list' %}">Promociones</a>
           <a class="nav-link {% if request.resolver_match.url_name == 'agendaevento_list' %}active{% endif %}" href="{% url 'agendaevento_list' %}">Eventos Reservables</a>
           <a class="nav-link {% if request.resolver_match.url_name == 'agendabloqueo_list' %}active{% endif %}" href="{% url 'agendabloqueo_list' %}">Bloqueos</a>
+          {% if es_superusuario %}
+            <a class="nav-link {% if request.resolver_match.url_name == 'estadocliente_list' %}active{% endif %}" href="{% url 'estadocliente_list' %}">Estados Cliente</a>
+            <a class="nav-link {% if request.resolver_match.url_name == 'estadocita_list' %}active{% endif %}" href="{% url 'estadocita_list' %}">Estados Cita</a>
+          {% endif %}
           {% if es_administrador %}
             <a class="nav-link {% if request.resolver_match.url_name == 'veterinaria_list' %}active{% endif %}" href="{% url 'veterinaria_list' %}">Veterinarias</a>
           {% endif %}

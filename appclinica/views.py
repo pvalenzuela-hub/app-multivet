@@ -18,6 +18,7 @@ from .forms import (
     AtencionDetalleFormSet, CitaFormSet,
     MascotaForm, CitaForm, CitaEstadoForm,
     EspecieForm, RazaForm, PrestacionForm, ControlForm,
+    EstadoClienteForm, EstadoCitaForm,
     AtencionUpdateForm, AtencionDetalleForm,
     CitaUpdateForm, AgendaEventoForm, AgendaEventoHorarioForm,
     AgendaBloqueoForm, ReservaAccesoForm, ReservaPublicaBusquedaForm,
@@ -27,6 +28,7 @@ from .forms import (
 
 from .models import (
     cliente, mascota, atencion, atenciondetalle, cita, especie, control, raza, prestacion, comuna,
+    estadocliente, estadocita,
     agendaevento, agendaeventohorario, agendabloqueo, reserva, promocion, veterinaria,
     VENTANA_RESERVA_DIAS, obtener_slots_disponibles, OrigenCliente,
 )
@@ -70,6 +72,15 @@ def administrador_required(view_func):
     @login_required
     def wrapper(request, *args, **kwargs):
         if not usuario_es_administrador(request.user):
+            raise PermissionDenied
+        return view_func(request, *args, **kwargs)
+    return wrapper
+
+
+def superusuario_required(view_func):
+    @login_required
+    def wrapper(request, *args, **kwargs):
+        if not request.user.is_superuser:
             raise PermissionDenied
         return view_func(request, *args, **kwargs)
     return wrapper
@@ -1043,6 +1054,165 @@ def control_delete(request, pk):
         "title": "Eliminar Control",
         "object_name": obj.nombre,
         "back_url": "control_list",
+    })
+
+
+# -------------------------
+# ESTADOS (globales)
+# -------------------------
+@superusuario_required
+def estadocliente_list(request):
+    q = (request.GET.get("q") or "").strip()
+    qs = estadocliente.objects.order_by("nombre")
+    if q:
+        qs = qs.filter(nombre__icontains=q)
+
+    return render(request, "catalogo/simple_list.html", {
+        "title": "Estados Cliente",
+        "q": q,
+        "items": qs,
+        "create_url": "estadocliente_create",
+        "update_url": "estadocliente_update",
+        "delete_url": "estadocliente_delete",
+        "show_especie": False,
+    })
+
+
+@superusuario_required
+def estadocliente_create(request):
+    if request.method == "POST":
+        form = EstadoClienteForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Estado cliente creado correctamente.")
+            return redirect("estadocliente_list")
+    else:
+        form = EstadoClienteForm()
+
+    return render(request, "catalogo/simple_form.html", {
+        "title": "Nuevo Estado Cliente",
+        "form": form,
+        "back_url": "estadocliente_list",
+    })
+
+
+@superusuario_required
+def estadocliente_update(request, pk):
+    obj = get_object_or_404(estadocliente, pk=pk)
+    if request.method == "POST":
+        form = EstadoClienteForm(request.POST, instance=obj)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Estado cliente actualizado correctamente.")
+            return redirect("estadocliente_list")
+    else:
+        form = EstadoClienteForm(instance=obj)
+
+    return render(request, "catalogo/simple_form.html", {
+        "title": "Editar Estado Cliente",
+        "form": form,
+        "back_url": "estadocliente_list",
+    })
+
+
+@superusuario_required
+def estadocliente_delete(request, pk):
+    obj = get_object_or_404(estadocliente, pk=pk)
+
+    if request.method == "POST":
+        if cliente.objects.filter(estado=obj).exists():
+            messages.error(request, "No se puede eliminar el estado porque está utilizado por clientes.")
+            return redirect("estadocliente_list")
+
+        try:
+            obj.delete()
+            messages.success(request, "Estado cliente eliminado correctamente.")
+        except (ProtectedError, IntegrityError):
+            messages.error(request, "No se puede eliminar el estado porque está en uso.")
+        return redirect("estadocliente_list")
+
+    return render(request, "catalogo/confirm_delete.html", {
+        "title": "Eliminar Estado Cliente",
+        "object_name": obj.nombre,
+        "back_url": "estadocliente_list",
+    })
+
+
+@superusuario_required
+def estadocita_list(request):
+    q = (request.GET.get("q") or "").strip()
+    qs = estadocita.objects.order_by("nombre")
+    if q:
+        qs = qs.filter(nombre__icontains=q)
+
+    return render(request, "catalogo/simple_list.html", {
+        "title": "Estados Cita",
+        "q": q,
+        "items": qs,
+        "create_url": "estadocita_create",
+        "update_url": "estadocita_update",
+        "delete_url": "estadocita_delete",
+        "show_especie": False,
+    })
+
+
+@superusuario_required
+def estadocita_create(request):
+    if request.method == "POST":
+        form = EstadoCitaForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Estado cita creado correctamente.")
+            return redirect("estadocita_list")
+    else:
+        form = EstadoCitaForm()
+
+    return render(request, "catalogo/simple_form.html", {
+        "title": "Nuevo Estado Cita",
+        "form": form,
+        "back_url": "estadocita_list",
+    })
+
+
+@superusuario_required
+def estadocita_update(request, pk):
+    obj = get_object_or_404(estadocita, pk=pk)
+    if request.method == "POST":
+        form = EstadoCitaForm(request.POST, instance=obj)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Estado cita actualizado correctamente.")
+            return redirect("estadocita_list")
+    else:
+        form = EstadoCitaForm(instance=obj)
+
+    return render(request, "catalogo/simple_form.html", {
+        "title": "Editar Estado Cita",
+        "form": form,
+        "back_url": "estadocita_list",
+    })
+
+
+@superusuario_required
+def estadocita_delete(request, pk):
+    obj = get_object_or_404(estadocita, pk=pk)
+
+    if request.method == "POST":
+        if cita.objects.filter(estado=obj).exists():
+            messages.error(request, "No se puede eliminar el estado porque está utilizado por citas.")
+            return redirect("estadocita_list")
+
+        try:
+            obj.delete()
+            messages.success(request, "Estado cita eliminado correctamente.")
+        except (ProtectedError, IntegrityError):
+            messages.error(request, "No se puede eliminar el estado porque está en uso.")
+        return redirect("estadocita_list")
+
+    return render(request, "catalogo/confirm_delete.html", {
+        "title": "Eliminar Estado Cita",
+        "object_name": obj.nombre,
+        "back_url": "estadocita_list",
     })
 
 @login_required

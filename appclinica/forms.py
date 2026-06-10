@@ -7,6 +7,7 @@ from django.forms import inlineformset_factory, formset_factory
 from django.db.models.functions import Lower
 from .models import (
     cliente, mascota, atencion, atenciondetalle, cita, especie, raza, control, prestacion,
+    estadocliente, estadocita,
     agendaevento, agendaeventohorario, agendabloqueo, reserva, comuna, Sexo,
     promocion, veterinaria,
     VENTANA_RESERVA_DIAS,
@@ -287,6 +288,26 @@ class PrestacionForm(forms.ModelForm):
 class ControlForm(forms.ModelForm):
     class Meta:
         model = control
+        fields = ["nombre"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        apply_bootstrap(self)
+
+
+class EstadoClienteForm(forms.ModelForm):
+    class Meta:
+        model = estadocliente
+        fields = ["nombre"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        apply_bootstrap(self)
+
+
+class EstadoCitaForm(forms.ModelForm):
+    class Meta:
+        model = estadocita
         fields = ["nombre"]
 
     def __init__(self, *args, **kwargs):

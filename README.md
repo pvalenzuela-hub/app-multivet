@@ -17,6 +17,7 @@
 - La migracion `0024_usuario_veterinaria_y_tenant_nullable` crea el perfil por usuario y agrega los FKs tenantizados.
 - La migracion `0025_backfill_tenant_data` asigna los registros existentes a la veterinaria master.
 - La migracion `0026_tenant_constraints` deja los campos obligatorios y aplica unicidad por veterinaria.
+- Los catálogos globales `Estados Cliente` y `Estados Cita` se administran desde la app solo para superuser.
 - El superuser puede cambiar la veterinaria activa desde el selector del sidebar y ese cambio se persiste como default.
 - Los flujos publicos de reserva siguen anclados a la veterinaria master; quedan fuera de esta ola.
 - Para una base de produccion usa `python manage.py seed_production` despues de `migrate`; acepta `--logo-url`, `--nombre` y credenciales SMTP para dejar la veterinaria base lista sin los datos demo.

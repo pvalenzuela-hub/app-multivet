@@ -123,6 +123,102 @@ class LoginTemplateTests(TestCase):
         self.assertContains(response, "alt=\"Vetnex\"")
 
 
+class EstadoCatalogoTests(ReservaBaseMixin, TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.superuser = get_user_model().objects.create_superuser(
+            username="estado_super",
+            email="estado_super@example.com",
+            password="secret123",
+        )
+        cls.regular_user = get_user_model().objects.create_user(
+            username="estado_user",
+            password="secret123",
+        )
+        cls.control = control.objects.create(veterinaria=cls.veterinaria, nombre="Control general")
+
+    def setUp(self):
+        self.client.force_login(self.superuser)
+
+    def test_acceso_solo_superuser(self):
+        self.client.force_login(self.regular_user)
+
+        self.assertEqual(self.client.get(reverse("estadocliente_list")).status_code, 403)
+        self.assertEqual(self.client.get(reverse("estadocita_list")).status_code, 403)
+
+    def test_crud_estado_cliente_superuser(self):
+        response = self.client.get(reverse("estadocliente_list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Estados Cliente")
+
+        response = self.client.post(reverse("estadocliente_create"), {"nombre": "Suspendido"})
+        self.assertRedirects(response, reverse("estadocliente_list"))
+
+        estado = estadocliente.objects.get(nombre="Suspendido")
+        response = self.client.post(reverse("estadocliente_update", args=[estado.id]), {"nombre": "Revisado"})
+        self.assertRedirects(response, reverse("estadocliente_list"))
+        estado.refresh_from_db()
+        self.assertEqual(estado.nombre, "Revisado")
+
+        response = self.client.post(reverse("estadocliente_delete", args=[estado.id]))
+        self.assertRedirects(response, reverse("estadocliente_list"))
+        self.assertFalse(estadocliente.objects.filter(id=estado.id).exists())
+
+    def test_crud_estado_cita_superuser(self):
+        response = self.client.get(reverse("estadocita_list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Estados Cita")
+
+        response = self.client.post(reverse("estadocita_create"), {"nombre": "Reprogramada"})
+        self.assertRedirects(response, reverse("estadocita_list"))
+
+        estado = estadocita.objects.get(nombre="Reprogramada")
+        response = self.client.post(reverse("estadocita_update", args=[estado.id]), {"nombre": "Reagendada"})
+        self.assertRedirects(response, reverse("estadocita_list"))
+        estado.refresh_from_db()
+        self.assertEqual(estado.nombre, "Reagendada")
+
+        response = self.client.post(reverse("estadocita_delete", args=[estado.id]))
+        self.assertRedirects(response, reverse("estadocita_list"))
+        self.assertFalse(estadocita.objects.filter(id=estado.id).exists())
+
+    def test_no_elimina_estado_cliente_en_uso(self):
+        estado = estadocliente.objects.create(nombre="En revision")
+        cliente.objects.create(
+            veterinaria=self.veterinaria,
+            rut=f"23456789-{rut_dv('23456789')}",
+            nombre="Cliente Estado",
+            email="cliente.estado@example.com",
+            telefono="777777777",
+            direccion="Calle Estado 123",
+            comuna=self.comuna,
+            estado=estado,
+            origen=OrigenCliente.SISTEMA,
+        )
+
+        response = self.client.post(reverse("estadocliente_delete", args=[estado.id]))
+
+        self.assertRedirects(response, reverse("estadocliente_list"))
+        self.assertTrue(estadocliente.objects.filter(id=estado.id).exists())
+
+    def test_no_elimina_estado_cita_en_uso(self):
+        estado = estadocita.objects.create(nombre="Revisada")
+        cita.objects.create(
+            mascota=self.mascota,
+            veterinaria=self.veterinaria,
+            fecha=self.manana,
+            control=self.control,
+            observacion="",
+            estado=estado,
+        )
+
+        response = self.client.post(reverse("estadocita_delete", args=[estado.id]))
+
+        self.assertRedirects(response, reverse("estadocita_list"))
+        self.assertTrue(estadocita.objects.filter(id=estado.id).exists())
+
+
 class ProductionSeedCommandTests(TestCase):
     def test_seed_production_reemplaza_demo_y_deja_base(self):
         out = StringIO()
