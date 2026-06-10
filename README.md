@@ -22,6 +22,7 @@
 - Los flujos publicos de reserva siguen anclados a la veterinaria master; quedan fuera de esta ola.
 - Para una base de produccion usa `python manage.py seed_production` despues de `migrate`; acepta `--logo-url`, `--nombre` y credenciales SMTP para dejar la veterinaria base lista sin los datos demo.
 - El comando `seed_production` es idempotente: puedes volver a correrlo sin duplicar la veterinaria base.
+- El `seed_production` y la migracion `0030_reset_seed_sequences` re-alinean las secuencias de `veterinaria`, `estadocliente` y `estadocita` para evitar errores al crear nuevos registros despues de los seeds con `pk=1`.
 - Si no pasas `--logo-url`, el comando usa `SEED_VETERINARIA_LOGO_URL`, `PUBLIC_SITE_URL` o un logo placeholder seguro.
 - El logo del login vive en `appclinica/static/img/vetnex-logo.svg` y `collectstatic` lo deja en `staticfiles/img/vetnex-logo.svg`; no es necesario agregar `appclinica/static` a `STATICFILES_DIRS` porque Django lo descubre como static de la app.
 

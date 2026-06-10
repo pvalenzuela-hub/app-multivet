@@ -1,7 +1,8 @@
 import os
 
+from django.core.management.color import no_style
 from django.core.management.base import BaseCommand
-from django.db import transaction
+from django.db import connection, transaction
 
 from appclinica.models import (
     cliente,
@@ -44,6 +45,13 @@ def _resolve_logo_url(explicit_logo, existing_logo):
         return existing_logo
 
     return DEFAULT_LOGO_URL
+
+
+def _reset_sequences(models):
+    sql_statements = connection.ops.sequence_reset_sql(no_style(), models)
+    with connection.cursor() as cursor:
+        for statement in sql_statements:
+            cursor.execute(statement)
 
 
 class Command(BaseCommand):
@@ -94,5 +102,7 @@ class Command(BaseCommand):
             prestacion.objects.filter(veterinaria=vet, nombre=DEMO_PRESTACION_NAME).update(nombre="Consulta general")
             control.objects.update_or_create(veterinaria=vet, nombre="Control general", defaults={})
             prestacion.objects.update_or_create(veterinaria=vet, nombre="Consulta general", defaults={})
+
+            _reset_sequences([veterinaria, estadocliente, estadocita])
 
         self.stdout.write(self.style.SUCCESS("Seed de produccion aplicado correctamente."))

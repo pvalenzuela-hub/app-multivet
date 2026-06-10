@@ -242,6 +242,10 @@ class ProductionSeedCommandTests(TestCase):
         self.assertTrue(prestacion.objects.filter(veterinaria=vet, nombre="Consulta general").exists())
         self.assertFalse(control.objects.filter(veterinaria=vet, nombre="Control demo").exists())
         self.assertFalse(prestacion.objects.filter(veterinaria=vet, nombre="Consulta demo").exists())
+        nuevo_estado_cliente = estadocliente.objects.create(nombre="Temporal Cliente")
+        nuevo_estado_cita = estadocita.objects.create(nombre="Temporal Cita")
+        self.assertNotEqual(nuevo_estado_cliente.id, 1)
+        self.assertNotEqual(nuevo_estado_cita.id, 1)
         self.assertIn("Seed de produccion aplicado correctamente.", out.getvalue())
 
 
