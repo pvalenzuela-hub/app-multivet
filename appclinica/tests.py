@@ -121,6 +121,20 @@ class LoginTemplateTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "vetnex-logo.svg")
         self.assertContains(response, "alt=\"Vetnex\"")
+        self.assertContains(response, "Gestioná tu clínica desde un solo lugar.")
+        self.assertContains(response, "Ingresá al panel")
+
+    def test_login_y_home_renderizan_logo(self):
+        user = get_user_model().objects.create_user(username="login_smoke", password="secret123")
+
+        login_response = self.client.get(reverse("login"))
+        self.client.force_login(user)
+        home_response = self.client.get(reverse("cliente_list"))
+
+        self.assertEqual(login_response.status_code, 200)
+        self.assertEqual(home_response.status_code, 200)
+        self.assertContains(login_response, "vetnex-logo.svg")
+        self.assertContains(home_response, "vetnex-logo.svg")
 
 
 class EstadoCatalogoTests(ReservaBaseMixin, TestCase):

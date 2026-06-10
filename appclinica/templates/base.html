@@ -270,7 +270,7 @@
 {% endif %}
 
 <!-- Main (único) -->
-<main class="{% if request.user.is_authenticated and not hide_sidebar %}flex-grow-1 p-3 p-lg-4{% else %}container py-5{% endif %}">
+<main class="{% if request.user.is_authenticated and not hide_sidebar %}flex-grow-1 p-3 p-lg-4{% elif full_width_page %}container-fluid px-0 py-0{% else %}container py-5{% endif %}">
   {% if messages %}
     {% for message in messages %}
       <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">

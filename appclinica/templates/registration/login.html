@@ -3,46 +3,399 @@
 
 {% block title %}Ingreso | Vetnex{% endblock %}
 
+{% block extra_css %}
+<style>
+  body {
+    background: #edf7f5;
+  }
+
+  .login-shell {
+    position: relative;
+    overflow: hidden;
+    min-height: 100vh;
+    background:
+      radial-gradient(circle at top left, rgba(33, 199, 191, .22), transparent 34%),
+      radial-gradient(circle at right center, rgba(79, 70, 229, .14), transparent 28%),
+      linear-gradient(135deg, #f6fffd 0%, #eef7fb 48%, #eef2ff 100%);
+  }
+
+  .login-shell::before,
+  .login-shell::after {
+    content: "";
+    position: absolute;
+    border-radius: 999px;
+    pointer-events: none;
+    filter: blur(8px);
+    opacity: .55;
+  }
+
+  .login-shell::before {
+    width: 360px;
+    height: 360px;
+    right: -110px;
+    top: 20px;
+    background: radial-gradient(circle, rgba(14, 165, 164, .22) 0%, rgba(14, 165, 164, 0) 68%);
+  }
+
+  .login-shell::after {
+    width: 300px;
+    height: 300px;
+    left: -90px;
+    bottom: 20px;
+    background: radial-gradient(circle, rgba(99, 102, 241, .16) 0%, rgba(99, 102, 241, 0) 68%);
+  }
+
+  .login-hero,
+  .login-panel {
+    position: relative;
+    z-index: 1;
+  }
+
+  .brand-banner {
+    display: inline-flex;
+    align-items: center;
+    gap: .9rem;
+    margin-bottom: 1.4rem;
+  }
+
+  .brand-banner img {
+    width: min(100%, 260px);
+    height: auto;
+    display: block;
+  }
+
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: .45rem;
+    padding: .45rem .8rem;
+    border-radius: 999px;
+    background: rgba(15, 118, 110, .08);
+    color: #0f766e;
+    font-size: .82rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+
+  .hero-title {
+    font-size: clamp(2.35rem, 4.4vw, 4.85rem);
+    line-height: .95;
+    letter-spacing: -0.045em;
+    font-weight: 800;
+    color: #0f172a;
+    max-width: 12ch;
+    margin: .9rem 0 1rem;
+  }
+
+  .hero-copy {
+    max-width: 58ch;
+    color: #475569;
+    font-size: 1.03rem;
+    line-height: 1.7;
+  }
+
+  .feature-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .75rem;
+    margin: 1.4rem 0 0;
+  }
+
+  .feature-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: .55rem;
+    padding: .7rem 1rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, .76);
+    border: 1px solid rgba(148, 163, 184, .22);
+    box-shadow: 0 18px 40px rgba(15, 23, 42, .05);
+    color: #0f172a;
+    font-weight: 600;
+    backdrop-filter: blur(12px);
+  }
+
+  .preview-card {
+    margin-top: 1.8rem;
+    padding: 1.2rem;
+    border-radius: 28px;
+    background: rgba(255, 255, 255, .72);
+    border: 1px solid rgba(148, 163, 184, .18);
+    box-shadow: 0 30px 80px rgba(15, 23, 42, .10);
+    backdrop-filter: blur(16px);
+  }
+
+  .preview-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: .45rem;
+    padding: .4rem .7rem;
+    border-radius: 999px;
+    background: rgba(15, 118, 110, .10);
+    color: #0f766e;
+    font-size: .78rem;
+    font-weight: 700;
+    letter-spacing: .02em;
+  }
+
+  .timeline-item {
+    display: flex;
+    gap: .85rem;
+    align-items: flex-start;
+    padding: .8rem 0;
+    border-top: 1px solid rgba(148, 163, 184, .18);
+  }
+
+  .timeline-item:first-of-type {
+    border-top: 0;
+    padding-top: .2rem;
+  }
+
+  .timeline-dot {
+    width: .68rem;
+    height: .68rem;
+    margin-top: .35rem;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #14b8a6, #0f766e);
+    box-shadow: 0 0 0 .35rem rgba(20, 184, 166, .14);
+    flex: 0 0 auto;
+  }
+
+  .stat-card {
+    border-radius: 20px;
+    padding: .95rem 1rem;
+    color: #fff;
+    background: linear-gradient(135deg, #0f766e 0%, #0f172a 100%);
+    box-shadow: 0 18px 40px rgba(15, 118, 110, .24);
+  }
+
+  .stat-card small {
+    display: block;
+    font-size: .76rem;
+    opacity: .78;
+    letter-spacing: .03em;
+    text-transform: uppercase;
+  }
+
+  .stat-card strong {
+    display: block;
+    font-size: 1.5rem;
+    line-height: 1.05;
+    margin-top: .3rem;
+  }
+
+  .login-panel {
+    border: 0;
+    border-radius: 32px;
+    background: rgba(255, 255, 255, .88);
+    box-shadow: 0 36px 90px rgba(15, 23, 42, .14);
+    backdrop-filter: blur(18px);
+  }
+
+  .login-panel .form-label {
+    font-weight: 600;
+    color: #0f172a;
+  }
+
+  .login-panel .form-control {
+    border-radius: 16px;
+    border-color: rgba(148, 163, 184, .28);
+    padding: .88rem 1rem;
+  }
+
+  .login-panel .form-control:focus {
+    border-color: rgba(20, 184, 166, .55);
+    box-shadow: 0 0 0 .25rem rgba(20, 184, 166, .12);
+  }
+
+  .login-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: .5rem;
+    margin-bottom: 1rem;
+    padding: .45rem .75rem;
+    border-radius: 999px;
+    background: rgba(15, 118, 110, .08);
+    color: #0f766e;
+    font-size: .82rem;
+    font-weight: 700;
+  }
+
+  .login-footer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .75rem;
+    justify-content: space-between;
+    margin-top: 1rem;
+    color: #64748b;
+    font-size: .9rem;
+  }
+
+  .login-footer span {
+    display: inline-flex;
+    align-items: center;
+    gap: .45rem;
+  }
+
+  @media (max-width: 991.98px) {
+    .hero-title {
+      max-width: 100%;
+    }
+
+    .login-shell {
+      min-height: auto;
+    }
+  }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="row justify-content-center">
-  <div class="col-12 col-sm-10 col-md-6 col-lg-5">
-
-    <div class="text-center mb-4">
-      <img src="{% static 'img/vetnex-logo.svg' %}" alt="Vetnex" class="img-fluid" style="max-width: 430px; width: 100%; height: auto;">
-    </div>
-
-    <div class="card shadow-sm">
-      <div class="card-body p-4">
-
-        {% if form.errors %}
-          <div class="alert alert-danger">
-            Usuario o contraseña incorrectos.
-          </div>
-        {% endif %}
-
-        <form method="post" action="{% url 'login' %}">
-          {% csrf_token %}
-
-          <div class="mb-3">
-            <label class="form-label">RUT</label>
-            <input type="text" name="username" class="form-control" autofocus required>
+<section class="login-shell">
+  <div class="container py-4 py-lg-5">
+    <div class="row align-items-center g-4 g-lg-5 min-vh-100">
+      <div class="col-lg-7 order-2 order-lg-1">
+        <div class="login-hero pe-lg-4">
+          <div class="brand-banner">
+            <img src="{% static 'img/vetnex-logo.svg' %}" alt="Vetnex">
           </div>
 
-          <div class="mb-3">
-            <label class="form-label">Contraseña</label>
-            <input type="password" name="password" class="form-control" required>
+          <span class="eyebrow"><i class="bi bi-stars"></i> Gestión integral para veterinarias</span>
+          <h1 class="hero-title">Controla tu veterinaria</h1>
+          <p class="hero-copy mb-0">
+            Agenda, historia clínica, clientes, reservas y promociones en una experiencia limpia,
+            rápida y pensada para equipos veterinarios que necesitan moverse sin fricción.
+          </p>
+
+          <div class="feature-list">
+            <span class="feature-pill"><i class="bi bi-calendar2-week"></i> Agenda inteligente</span>
+            <span class="feature-pill"><i class="bi bi-clipboard2-pulse"></i> Historia clínica digital</span>
+            <span class="feature-pill"><i class="bi bi-bell"></i> Recordatorios automáticos</span>
           </div>
 
-          <input type="hidden" name="next" value="{{ next }}">
+          <div class="preview-card">
+            <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+              <div>
+                <div class="preview-chip mb-2"><i class="bi bi-graph-up"></i> Vista previa del panel</div>
+                <h2 class="h4 mb-1 fw-bold text-dark">Agenda de hoy</h2>
+                <div class="text-muted">Seguimiento rápido de turnos y actividad clínica.</div>
+              </div>
+              <span class="badge rounded-pill bg-success-subtle text-success border border-success-subtle px-3 py-2">
+                En línea
+              </span>
+            </div>
 
-          <div class="d-grid">
-            <button class="btn btn-primary" type="submit">Entrar</button>
+            <div class="row g-3 align-items-stretch">
+              <div class="col-md-7">
+                <div class="h-100 p-3 rounded-4 bg-white border">
+                  <div class="timeline-item">
+                    <div class="timeline-dot"></div>
+                    <div>
+                      <div class="small text-uppercase text-muted fw-semibold">09:00</div>
+                      <div class="fw-semibold text-dark">Luna · Consulta</div>
+                      <div class="text-muted small">Cliente García</div>
+                    </div>
+                  </div>
+                  <div class="timeline-item">
+                    <div class="timeline-dot"></div>
+                    <div>
+                      <div class="small text-uppercase text-muted fw-semibold">10:00</div>
+                      <div class="fw-semibold text-dark">Thor · Vacunas</div>
+                      <div class="text-muted small">Cliente López</div>
+                    </div>
+                  </div>
+                  <div class="timeline-item">
+                    <div class="timeline-dot"></div>
+                    <div>
+                      <div class="small text-uppercase text-muted fw-semibold">11:00</div>
+                      <div class="fw-semibold text-dark">Mia · Control</div>
+                      <div class="text-muted small">Cliente Rodríguez</div>
+                    </div>
+                  </div>
+                  <div class="timeline-item pb-0">
+                    <div class="timeline-dot bg-secondary"></div>
+                    <div>
+                      <div class="small text-uppercase text-muted fw-semibold">12:00</div>
+                      <div class="fw-semibold text-dark">Disponible</div>
+                      <div class="text-muted small">Espacio libre para agenda rápida</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="col-md-5">
+                <div class="h-100 d-flex flex-column gap-3">
+                  <div class="stat-card">
+                    <small>Turnos hoy</small>
+                    <strong>12</strong>
+                    <div class="small opacity-75">+2 respecto a ayer</div>
+                  </div>
+                  <div class="stat-card" style="background: linear-gradient(135deg, #0f766e 0%, #2563eb 100%);">
+                    <small>Clientes activos</small>
+                    <strong>234</strong>
+                    <div class="small opacity-75">Crecimiento sostenido</div>
+                  </div>
+                  <div class="stat-card" style="background: linear-gradient(135deg, #111827 0%, #334155 100%);">
+                    <small>Recordatorios</small>
+                    <strong>48</strong>
+                    <div class="small opacity-75">Email y alertas listas</div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-        </form>
+        </div>
+      </div>
 
+      <div class="col-lg-5 order-1 order-lg-2">
+        <div class="login-panel card">
+          <div class="card-body p-4 p-lg-5">
+            <div class="d-flex align-items-center gap-3 mb-4">
+              <img src="{% static 'img/vetnex-logo.svg' %}" alt="Vetnex" style="width: 88px; height: auto;">
+              <div>
+                <div class="login-badge mb-2"><i class="bi bi-shield-lock"></i> Acceso seguro</div>
+                <div class="h4 mb-0 fw-bold text-dark">inicio de sesión</div>
+              </div>
+            </div>
+
+            <p class="text-muted mb-4">
+              Usá tu RUT y contraseña para entrar a la clínica y continuar con tu veterinaria activa.
+            </p>
+
+            {% if form.errors %}
+              <div class="alert alert-danger border-0 rounded-4">
+                Usuario o contraseña incorrectos.
+              </div>
+            {% endif %}
+
+            <form method="post" action="{% url 'login' %}">
+              {% csrf_token %}
+
+              <div class="mb-3">
+                <label class="form-label">RUT</label>
+                <input type="text" name="username" class="form-control" autofocus required placeholder="12345678-9">
+              </div>
+
+              <div class="mb-4">
+                <label class="form-label">Contraseña</label>
+                <input type="password" name="password" class="form-control" required placeholder="Tu contraseña">
+              </div>
+
+              <input type="hidden" name="next" value="{{ next }}">
+
+              <div class="d-grid">
+                <button class="btn btn-lg btn-primary rounded-4" type="submit">Entrar</button>
+              </div>
+            </form>
+
+            <div class="login-footer">
+              <span><i class="bi bi-shield-check text-success"></i> Datos aislados por veterinaria</span>
+              <span><i class="bi bi-lightning-charge text-warning"></i> Inicio rápido</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
-
   </div>
-</div>
+</section>
 {% endblock %}

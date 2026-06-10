@@ -6,8 +6,8 @@ from django.contrib.auth import login as auth_login, logout as auth_logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView, LogoutView
 from django.core.mail import EmailMessage, get_connection
-from django.db import transaction, IntegrityError
-from django.db.models import Q, Prefetch, Count, Case, When, Value, IntegerField
+from django.db import connection, transaction, IntegrityError
+from django.db.models import Q, Prefetch, Count, Case, When, Value, IntegerField, CharField
 from django.db.models.functions import TruncDate
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
@@ -206,6 +206,7 @@ def rut_canon(r: str) -> str:
 # -------------------------
 class AppLoginView(LoginView):
     template_name = "registration/login.html"
+    extra_context = {"full_width_page": True}
 
     def form_valid(self, form):
         user = form.get_user()
@@ -231,16 +232,14 @@ class AppLogoutView(LogoutView):
 @login_required
 def cliente_list(request):
     vet = current_veterinaria(request)
-    qs = (
-        cliente.objects
-        .filter(veterinaria=vet)
-        .select_related("comuna")
-        .annotate(
+    qs_base = cliente.objects.filter(veterinaria=vet).select_related("comuna")
+    if connection.vendor == "postgresql":
+        qs = qs_base.annotate(
             mascotas_nombres=StringAgg("mascota__nombre", delimiter=", ", distinct=True)
         )
-        .all()
-        .order_by("-created_at")
-    )
+    else:
+        qs = qs_base.annotate(mascotas_nombres=Value("", output_field=CharField()))
+    qs = qs.all().order_by("-created_at")
 
     q = request.GET.get("q", "").strip()
     rut = request.GET.get("rut", "").strip()
