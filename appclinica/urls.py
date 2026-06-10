@@ -1,4 +1,4 @@
-# urls.py
+# urls.py ultima version 21:15
 from django.urls import path
 from .views import (
     AppLoginView, AppLogoutView,
