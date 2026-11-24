@@ -1,15 +1,22 @@
 {% extends "base.html" %}
 {% block title %}{{ title }}{% endblock %}
 {% block content %}
-<div class="container py-3">
-  <h3>{{ title }}</h3>
-  <form method="post" class="card shadow-sm">
+<div class="d-flex justify-content-between align-items-start mb-3">
+  <div>
+    <h2 class="mb-0">{{ title }}</h2>
+    <div class="text-muted">Configure el contenido de la promoción</div>
+  </div>
+  <a class="btn btn-outline-secondary" href="{% url 'promocion_list' %}">Volver</a>
+</div>
+  <form method="post" class="card">
     {% csrf_token %}
     <div class="card-body">
+      {{ form.non_field_errors }}
       {% for field in form %}
         <div class="mb-3">
-          <label class="form-label">{{ field.label }}</label>
+          <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
           {{ field }}
+          {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
           {% if field.errors %}<div class="text-danger small">{{ field.errors }}</div>{% endif %}
         </div>
       {% endfor %}
@@ -18,5 +25,4 @@
       <button class="btn btn-primary" type="submit">Guardar Cambios</button>
     </div>
   </form>
-</div>
 {% endblock %}

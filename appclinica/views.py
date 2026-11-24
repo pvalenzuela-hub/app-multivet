@@ -1,13 +1,15 @@
 import io
+import logging
 
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.validators import validate_email
 from django.contrib import messages
-from django.contrib.auth import login as auth_login, logout as auth_logout
+from django.contrib.auth import get_user_model, login as auth_login, logout as auth_logout
+from django.contrib.auth.models import Group
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView, LogoutView
-from django.core.mail import EmailMessage, get_connection
 from django.db import connection, transaction, IntegrityError
 from django.db.models import Q, Prefetch, Count, Case, When, Value, IntegerField, CharField
 from django.db.models.functions import TruncDate
@@ -29,14 +31,14 @@ from .forms import (
     CitaUpdateForm, AgendaEventoForm, AgendaEventoHorarioForm,
     AgendaBloqueoForm, ReservaAccesoForm, ReservaPublicaBusquedaForm,
     ReservaSlotForm, ReservaEstadoForm, ReservaPublicaRegistroForm,
-    PromocionForm, VeterinariaForm,
+    PromocionForm, VeterinariaForm, UsuarioCreateForm, UsuarioUpdateForm,
 )
 
 from .models import (
     cliente, mascota, atencion, atenciondetalle, cita, especie, control, raza, prestacion, comuna,
     estadocliente, estadocita,
     agendaevento, agendaeventohorario, agendabloqueo, reserva, promocion, veterinaria,
-    EstadoReserva,
+    EstadoReserva, UsuarioVeterinaria,
     VENTANA_RESERVA_DIAS, obtener_slots_disponibles, OrigenCliente,
 )
 from .tenancy import (
@@ -49,9 +51,11 @@ from .utils.rut import rut_validate_and_format
 import re
 from django.db.models.deletion import ProtectedError
 from django.views.decorators.http import require_POST
+from django_ratelimit.decorators import ratelimit
 from django.core.paginator import Paginator
 from django.utils import timezone
 from django.contrib.postgres.aggregates import StringAgg
+from .tasks import enviar_promocion_prueba_task, enviar_promocion_task
 
 
 ESTADO_CITA_DEFAULT_ID = 1  # <<-- el estado por defecto requerido
@@ -59,6 +63,7 @@ RESERVA_PUBLICA_SESSION_PREFIX = "reserva_publica"
 RESERVA_PUBLICA_CLIENTE_SUFFIX = "cliente_id"
 RESERVA_PUBLICA_DRAFT_SUFFIX = "draft"
 RESERVA_PUBLICA_REGISTRO_SUFFIX = "registro"
+logger = logging.getLogger(__name__)
 
 
 def current_veterinaria(request):
@@ -69,7 +74,9 @@ def current_veterinaria(request):
 
 
 def usuario_es_administrador(user):
-    return user.is_authenticated and user.groups.filter(name="Administrador").exists()
+    return user.is_authenticated and (
+        user.is_superuser or user.groups.filter(name="Administrador").exists()
+    )
 
 
 def usuario_es_superusuario(user):
@@ -301,7 +308,7 @@ def cliente_list(request):
             Q(plansalud__icontains=q) |
             Q(comuna__nombre__icontains=q) |
             Q(mascota__nombre__icontains=q)
-        )
+        ).distinct()
 
     # 2) Filtros específicos (AND)
     if rut:
@@ -394,14 +401,14 @@ def mascota_create_cliente(request, cliente_id: int):
     c = get_object_or_404(cliente, pk=cliente_id, veterinaria=vet)
 
     if request.method == "POST":
-        form = MascotaForm(request.POST)
+        form = MascotaForm(request.POST, veterinaria=vet)
         if form.is_valid():
             pet = form.save(commit=False)
             pet.cliente = c
             pet.save()
             return redirect("mascotas_por_cliente", cliente_id=c.id)
     else:
-        form = MascotaForm()
+        form = MascotaForm(veterinaria=vet)
 
     return render(request, "mascota/mascota_form.html", {
         "form": form,
@@ -676,7 +683,7 @@ def atenciondetalle_update(request, cliente_id: int, atencion_id: int, detalle_i
     })
 
 
-@login_required
+@administrador_required
 def atenciondetalle_delete(request, cliente_id: int, atencion_id: int, detalle_id: int):
     vet = current_veterinaria(request)
     c = get_object_or_404(cliente, pk=cliente_id, veterinaria=vet)
@@ -818,7 +825,7 @@ def especie_update(request, pk):
     })
 
 
-@login_required
+@administrador_required
 def especie_delete(request, pk):
     vet = current_veterinaria(request)
     obj = get_object_or_404(especie, pk=pk, veterinaria=vet)
@@ -915,7 +922,7 @@ def raza_update(request, pk):
     })
 
 
-@login_required
+@administrador_required
 def raza_delete(request, pk):
     vet = current_veterinaria(request)
     obj = get_object_or_404(raza.objects.select_related("especie"), pk=pk, especie__veterinaria=vet)
@@ -1002,7 +1009,7 @@ def prestacion_update(request, pk):
     })
 
 
-@login_required
+@administrador_required
 def prestacion_delete(request, pk):
     vet = current_veterinaria(request)
     obj = get_object_or_404(prestacion, pk=pk, veterinaria=vet)
@@ -1089,7 +1096,7 @@ def control_update(request, pk):
     })
 
 
-@login_required
+@administrador_required
 def control_delete(request, pk):
     vet = current_veterinaria(request)
     obj = get_object_or_404(control, pk=pk, veterinaria=vet)
@@ -1271,7 +1278,7 @@ def estadocita_delete(request, pk):
         "back_url": "estadocita_list",
     })
 
-@login_required
+@administrador_required
 @require_POST
 def cita_delete(request, cliente_id, cita_id):
     vet = current_veterinaria(request)
@@ -1286,7 +1293,7 @@ def cita_delete(request, cliente_id, cita_id):
     messages.success(request, "Cita eliminada correctamente.")
     return redirect("citas_por_cliente", cliente_id=cliente_id)
 
-@login_required
+@administrador_required
 @require_POST
 def atencion_delete(request, cliente_id, atencion_id):
     vet = current_veterinaria(request)
@@ -1303,7 +1310,7 @@ def atencion_delete(request, cliente_id, atencion_id):
     messages.success(request, "Atención eliminada correctamente.")
     return redirect("atenciones_por_cliente", cliente_id=cliente_id)
 
-@login_required
+@administrador_required
 def mascota_delete_confirm(request, mascota_id):
     vet = current_veterinaria(request)
     m = get_object_or_404(mascota, pk=mascota_id, cliente__veterinaria=vet)
@@ -1334,7 +1341,7 @@ def mascota_delete_confirm(request, mascota_id):
     })
 
 
-@login_required
+@administrador_required
 def cliente_delete_confirm(request, cliente_id):
     vet = current_veterinaria(request)
     c = get_object_or_404(cliente, pk=cliente_id, veterinaria=vet)
@@ -1375,6 +1382,10 @@ def dashboard_panel(request):
     d30 = today - timedelta(days=29)   # incluye hoy => 30 días
     next2 = today + timedelta(days=2)
     reservas_hasta = today + timedelta(days=13)
+    inicio_hoy = timezone.make_aware(datetime.combine(today, time.min))
+    inicio_manana = inicio_hoy + timedelta(days=1)
+    inicio_7d = timezone.make_aware(datetime.combine(d7, time.min))
+    inicio_30d = timezone.make_aware(datetime.combine(d30, time.min))
 
     # Totales base
     total_clientes = cliente.objects.filter(veterinaria=vet).count()
@@ -1383,19 +1394,26 @@ def dashboard_panel(request):
     total_reservas = reserva.objects.filter(fecha__gte=today, veterinaria=vet).count()
 
     # Atenciones (hoy/7/30)
-    atenciones_hoy = atencion.objects.filter(fechaatencion__date=today, veterinaria=vet).count()
-    atenciones_7d = atencion.objects.filter(fechaatencion__date__gte=d7, veterinaria=vet).count()
-    atenciones_30d = atencion.objects.filter(fechaatencion__date__gte=d30, veterinaria=vet).count()
+    atenciones_hoy = atencion.objects.filter(
+        fechaatencion__gte=inicio_hoy,
+        fechaatencion__lt=inicio_manana,
+        veterinaria=vet,
+    ).count()
+    atenciones_7d = atencion.objects.filter(fechaatencion__gte=inicio_7d, veterinaria=vet).count()
+    atenciones_30d = atencion.objects.filter(fechaatencion__gte=inicio_30d, veterinaria=vet).count()
 
     # Prestaciones (conteos)
     prestaciones_total = atenciondetalle.objects.filter(atencion__veterinaria=vet).count()
-    prestaciones_30d = atenciondetalle.objects.filter(created_at__date__gte=d30, atencion__veterinaria=vet).count()
+    prestaciones_30d = atenciondetalle.objects.filter(
+        created_at__gte=inicio_30d,
+        atencion__veterinaria=vet,
+    ).count()
     prom_prest_por_atencion = (prestaciones_total / total_atenciones) if total_atenciones else 0
 
     # Top prestaciones (30 días)
     top_prestaciones_30d = (
         atenciondetalle.objects
-        .filter(created_at__date__gte=d30, atencion__veterinaria=vet)
+        .filter(created_at__gte=inicio_30d, atencion__veterinaria=vet)
         .values("prestacion__nombre")
         .annotate(total=Count("id"))
         .order_by("-total", "prestacion__nombre")[:10]
@@ -1432,7 +1450,7 @@ def dashboard_panel(request):
     # Series simples (para tabla): atenciones por día (últimos 7)
     atenciones_por_dia = (
         atencion.objects
-        .filter(fechaatencion__date__gte=d7, veterinaria=vet)
+        .filter(fechaatencion__gte=inicio_7d, veterinaria=vet)
         .annotate(d=TruncDate("fechaatencion"))
         .values("d")
         .annotate(total=Count("id"))
@@ -1586,7 +1604,7 @@ def cita_update_global(request, cita_id: int):
         "cita": obj,
     })
 
-@login_required
+@administrador_required
 @require_POST
 def cita_delete_global(request, cita_id: int):
     vet = current_veterinaria(request)
@@ -1619,6 +1637,7 @@ def reserva_publica_qr(request, veterinaria_token):
     return response
 
 
+@ratelimit(key="ip", rate="10/m", method="POST", block=True)
 def reserva_publica_acceso(request, veterinaria_token=None):
     master_vet = _get_reserva_publica_veterinaria(request, veterinaria_token)
     veterinaria_token = master_vet.reserva_publica_token
@@ -1636,14 +1655,15 @@ def reserva_publica_acceso(request, veterinaria_token=None):
         ).first()
 
         if not cliente_obj:
-            cliente_obj = cliente.objects.filter(rut=rut, veterinaria=master_vet).first()
-            if cliente_obj:
-                cliente_obj.email = email
-                cliente_obj.save(update_fields=["email"])
-                _clear_reserva_publica_session(request, veterinaria_token)
-                request.session[_reserva_publica_session_key(veterinaria_token, RESERVA_PUBLICA_CLIENTE_SUFFIX)] = cliente_obj.id
-                return redirect("reserva_publica_nueva", veterinaria_token=veterinaria_token)
-
+            if cliente.objects.filter(rut=rut, veterinaria=master_vet).exists():
+                form.add_error(None, "No fue posible validar los datos de acceso.")
+                return render(request, "reserva/acceso_form.html", {
+                    "form": form,
+                    "show_register": False,
+                    "registro_initial": None,
+                    "veterinaria_token": veterinaria_token,
+                    "hide_sidebar": True,
+                })
             show_register = True
             registro_initial = {"rut": rut, "email": email}
             request.session[_reserva_publica_session_key(veterinaria_token, RESERVA_PUBLICA_REGISTRO_SUFFIX)] = registro_initial
@@ -1662,6 +1682,7 @@ def reserva_publica_acceso(request, veterinaria_token=None):
     })
 
 
+@ratelimit(key="ip", rate="5/m", method="POST", block=True)
 def reserva_publica_registro(request, veterinaria_token=None):
     master_vet = _get_reserva_publica_veterinaria(request, veterinaria_token)
     veterinaria_token = master_vet.reserva_publica_token
@@ -1676,13 +1697,11 @@ def reserva_publica_registro(request, veterinaria_token=None):
         rut = registro_data["rut"]
         email = registro_data["email"]
 
-        existente = cliente.objects.filter(rut=rut, veterinaria=master_vet).first()
+        existente = cliente.objects.filter(rut=rut, veterinaria=master_vet).exists()
         if existente:
-            existente.email = email
-            existente.save(update_fields=["email"])
             _clear_reserva_publica_session(request, veterinaria_token)
-            request.session[_reserva_publica_session_key(veterinaria_token, RESERVA_PUBLICA_CLIENTE_SUFFIX)] = existente.id
-            return redirect("reserva_publica_nueva", veterinaria_token=veterinaria_token)
+            messages.error(request, "No fue posible completar el registro. Valide sus datos de acceso.")
+            return redirect("reserva_publica_acceso", veterinaria_token=veterinaria_token)
 
         with transaction.atomic():
             cliente_obj = cliente.objects.create(
@@ -1766,6 +1785,7 @@ def reserva_publica_nueva(request, veterinaria_token=None):
     })
 
 
+@ratelimit(key="ip", rate="10/m", method="POST", block=True)
 def reserva_publica_slots(request, veterinaria_token=None):
     master_vet = _get_reserva_publica_veterinaria(request, veterinaria_token)
     veterinaria_token = master_vet.reserva_publica_token
@@ -1804,11 +1824,14 @@ def reserva_publica_slots(request, veterinaria_token=None):
                 )
 
                 try:
-                    obj.full_clean()
+                    with transaction.atomic():
+                        obj.full_clean()
+                        obj.save()
                 except ValidationError as exc:
                     _add_validation_error_to_form(form, exc)
+                except IntegrityError:
+                    form.add_error(None, "El horario seleccionado acaba de ser reservado. Seleccione otro horario.")
                 else:
-                    obj.save()
                     request.session.pop(_reserva_publica_session_key(veterinaria_token, RESERVA_PUBLICA_DRAFT_SUFFIX), None)
                     messages.success(request, "Reserva creada correctamente.")
                     return redirect("reserva_publica_confirmacion", veterinaria_token=veterinaria_token, reserva_id=obj.id)
@@ -1908,7 +1931,7 @@ def agendaevento_update(request, pk):
     })
 
 
-@login_required
+@administrador_required
 def agendaevento_delete(request, pk):
     vet = current_veterinaria(request)
     obj = get_object_or_404(agendaevento, pk=pk, veterinaria=vet)
@@ -1988,7 +2011,7 @@ def agendaeventohorario_update(request, evento_id, pk):
     })
 
 
-@login_required
+@administrador_required
 def agendaeventohorario_delete(request, evento_id, pk):
     vet = current_veterinaria(request)
     evento_obj = get_object_or_404(agendaevento, pk=evento_id, veterinaria=vet)
@@ -2065,7 +2088,7 @@ def agendabloqueo_update(request, pk):
     })
 
 
-@login_required
+@administrador_required
 def agendabloqueo_delete(request, pk):
     vet = current_veterinaria(request)
     obj = get_object_or_404(agendabloqueo, pk=pk, veterinaria=vet)
@@ -2114,10 +2137,18 @@ def reserva_list(request):
         qs = qs.filter(evento_id=int(evento_id))
 
     if fecha_desde:
-        qs = qs.filter(fecha__gte=fecha_desde)
+        try:
+            qs = qs.filter(fecha__gte=date.fromisoformat(fecha_desde))
+        except ValueError:
+            messages.warning(request, "La fecha desde no tiene un formato válido.")
+            fecha_desde = ""
 
     if fecha_hasta:
-        qs = qs.filter(fecha__lte=fecha_hasta)
+        try:
+            qs = qs.filter(fecha__lte=date.fromisoformat(fecha_hasta))
+        except ValueError:
+            messages.warning(request, "La fecha hasta no tiene un formato válido.")
+            fecha_hasta = ""
 
     eventos = agendaevento.objects.filter(veterinaria=vet, activo=True).order_by("nombre")
 
@@ -2157,7 +2188,7 @@ def reserva_update_estado(request, reserva_id):
     })
 
 
-@login_required
+@administrador_required
 def promocion_list(request):
     vet = current_veterinaria(request)
     q = (request.GET.get("q") or "").strip()
@@ -2172,7 +2203,7 @@ def promocion_list(request):
     })
 
 
-@login_required
+@administrador_required
 def promocion_create(request):
     vet = current_veterinaria(request)
     if request.method == "POST":
@@ -2201,7 +2232,7 @@ def promocion_create(request):
     })
 
 
-@login_required
+@administrador_required
 def promocion_update(request, pk):
     vet = current_veterinaria(request)
     obj = get_object_or_404(promocion, pk=pk, veterinaria=vet)
@@ -2231,7 +2262,7 @@ def promocion_update(request, pk):
     })
 
 
-@login_required
+@administrador_required
 def promocion_detail(request, pk):
     vet = current_veterinaria(request)
     obj = get_object_or_404(promocion, pk=pk, veterinaria=vet)
@@ -2240,7 +2271,7 @@ def promocion_detail(request, pk):
     return render(request, "promocion/promocion_detail.html", {"promocion": obj})
 
 
-@login_required
+@administrador_required
 def promocion_delete(request, pk):
     vet = current_veterinaria(request)
     obj = get_object_or_404(promocion, pk=pk, veterinaria=vet)
@@ -2256,27 +2287,7 @@ def promocion_delete(request, pk):
     })
 
 
-def enviar_promocion_por_correo(promocion_obj, vet, destinatarios):
-    connection = get_connection(
-        host=vet.smtp_host,
-        port=vet.smtp_port,
-        username=vet.smtp_usuario or None,
-        password=vet.smtp_password or None,
-        use_tls=vet.smtp_usa_tls,
-        use_ssl=vet.smtp_usa_ssl,
-        fail_silently=False,
-    )
-    email = EmailMessage(
-        subject=promocion_obj.titulo,
-        body=promocion_obj.texto_correo,
-        from_email=vet.correo,
-        to=destinatarios,
-        connection=connection,
-    )
-    email.send()
-
-
-@login_required
+@administrador_required
 @require_POST
 def promocion_enviar_correo(request, pk):
     vet = current_veterinaria(request)
@@ -2288,23 +2299,28 @@ def promocion_enviar_correo(request, pk):
         messages.error(request, "Debe configurar el servidor SMTP de la veterinaria antes de enviar promociones.")
         return redirect("promocion_list")
 
-    destinatarios = list(
+    destinatarios = (
         cliente.objects
         .filter(veterinaria=vet, email__isnull=False)
         .exclude(email="")
-        .values_list("email", flat=True)
         .distinct()
+        .count()
     )
     if not destinatarios:
         messages.error(request, "No existen clientes con correo registrado.")
         return redirect("promocion_list")
 
-    enviar_promocion_por_correo(obj, vet, destinatarios)
-    messages.success(request, f"Promocion enviada a {len(destinatarios)} cliente(s).")
+    try:
+        enviar_promocion_task.delay(obj.pk, vet.pk)
+    except Exception:
+        logger.exception("No fue posible encolar promoción %s para veterinaria %s", obj.pk, vet.pk)
+        messages.error(request, "No fue posible encolar la promoción. Revise Redis e intente nuevamente.")
+        return redirect("promocion_list")
+    messages.success(request, f"Promoción encolada para {destinatarios} cliente(s).")
     return redirect("promocion_list")
 
 
-@login_required
+@administrador_required
 @require_POST
 def promocion_enviar_prueba(request, pk):
     vet = current_veterinaria(request)
@@ -2320,11 +2336,21 @@ def promocion_enviar_prueba(request, pk):
     if not correo_prueba:
         messages.error(request, "Debe indicar un correo de prueba.")
         return redirect("promocion_list")
+    try:
+        validate_email(correo_prueba)
+    except ValidationError:
+        messages.error(request, "Debe indicar un correo de prueba válido.")
+        return redirect("promocion_list")
 
     vet.correo_prueba = correo_prueba
     vet.save(update_fields=["correo_prueba"])
-    enviar_promocion_por_correo(obj, vet, [correo_prueba])
-    messages.success(request, f"Correo de prueba enviado a {correo_prueba}.")
+    try:
+        enviar_promocion_prueba_task.delay(obj.pk, vet.pk, correo_prueba)
+    except Exception:
+        logger.exception("No fue posible encolar prueba de promoción %s para veterinaria %s", obj.pk, vet.pk)
+        messages.error(request, "No fue posible encolar el correo de prueba. Revise Redis.")
+        return redirect("promocion_list")
+    messages.success(request, f"Correo de prueba encolado para {correo_prueba}.")
     return redirect("promocion_list")
 
 
@@ -2439,3 +2465,111 @@ def veterinaria_set_active(request):
     set_active_veterinaria(request, vet, persist_default=True)
     messages.success(request, f"Veterinaria activa actualizada a {vet.nombre}.")
     return redirect(next_url)
+
+
+def _usuario_es_gestionable_por(request, target, vet):
+    """Un administrador local nunca puede administrar pares ni superusuarios."""
+    if target.is_superuser or target.veterinaria_profile.default_veterinaria_id != vet.id:
+        return False
+    if request.user.is_superuser:
+        return True
+    return not target.groups.filter(name="Administrador").exists()
+
+
+@administrador_required
+def usuario_list(request):
+    vet = current_veterinaria(request)
+    usuarios = (
+        get_user_model().objects
+        .filter(veterinaria_profile__default_veterinaria=vet, is_superuser=False)
+        .select_related("veterinaria_profile")
+        .prefetch_related("groups")
+        .order_by("username")
+    )
+    if not request.user.is_superuser:
+        usuarios = usuarios.exclude(groups__name="Administrador")
+
+    return render(request, "usuarios/usuario_list.html", {
+        "items": usuarios,
+        "veterinaria": vet,
+        "puede_asignar_administrador": request.user.is_superuser,
+    })
+
+
+def _asignar_veterinaria_y_rol_usuario(user, vet, es_administrador):
+    """Fija la única veterinaria de un usuario y aplica únicamente el rol permitido."""
+    UsuarioVeterinaria.objects.update_or_create(
+        user=user,
+        defaults={"default_veterinaria": vet},
+    )
+    grupo_administrador, _ = Group.objects.get_or_create(name="Administrador")
+    if es_administrador:
+        user.groups.add(grupo_administrador)
+    else:
+        user.groups.remove(grupo_administrador)
+
+
+@administrador_required
+def usuario_create(request):
+    vet = current_veterinaria(request)
+    puede_asignar_administrador = request.user.is_superuser
+    if request.method == "POST":
+        form = UsuarioCreateForm(request.POST, puede_asignar_administrador=puede_asignar_administrador)
+        if form.is_valid():
+            with transaction.atomic():
+                obj = form.save()
+                _asignar_veterinaria_y_rol_usuario(
+                    obj,
+                    vet,
+                    puede_asignar_administrador and form.cleaned_data.get("es_administrador", False),
+                )
+            messages.success(request, f"Usuario {obj.username} creado para {vet.nombre}.")
+            return redirect("usuario_list")
+    else:
+        form = UsuarioCreateForm(puede_asignar_administrador=puede_asignar_administrador)
+
+    return render(request, "usuarios/usuario_form.html", {
+        "form": form,
+        "title": "Nuevo usuario",
+        "veterinaria": vet,
+    })
+
+
+@administrador_required
+def usuario_update(request, pk):
+    vet = current_veterinaria(request)
+    obj = get_object_or_404(
+        get_user_model().objects.select_related("veterinaria_profile").prefetch_related("groups"),
+        pk=pk,
+        is_superuser=False,
+        veterinaria_profile__default_veterinaria=vet,
+    )
+    if not _usuario_es_gestionable_por(request, obj, vet):
+        raise PermissionDenied
+
+    puede_asignar_administrador = request.user.is_superuser
+    if request.method == "POST":
+        form = UsuarioUpdateForm(
+            request.POST,
+            instance=obj,
+            puede_asignar_administrador=puede_asignar_administrador,
+        )
+        if form.is_valid():
+            with transaction.atomic():
+                obj = form.save()
+                _asignar_veterinaria_y_rol_usuario(
+                    obj,
+                    vet,
+                    puede_asignar_administrador and form.cleaned_data.get("es_administrador", False),
+                )
+            messages.success(request, f"Usuario {obj.username} actualizado.")
+            return redirect("usuario_list")
+    else:
+        form = UsuarioUpdateForm(instance=obj, puede_asignar_administrador=puede_asignar_administrador)
+
+    return render(request, "usuarios/usuario_form.html", {
+        "form": form,
+        "title": "Editar usuario",
+        "veterinaria": vet,
+        "usuario_obj": obj,
+    })

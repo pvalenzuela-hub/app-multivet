@@ -2,6 +2,8 @@
 from datetime import timedelta
 
 from django import forms
+from django.contrib.auth import get_user_model
+from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.forms import inlineformset_factory, formset_factory
 from django.db.models.functions import Lower
@@ -326,20 +328,6 @@ class AtencionUpdateForm(forms.ModelForm):
             })
         }
 
-class AtencionDetalleForm(forms.ModelForm):
-    class Meta:
-        model = atenciondetalle
-        fields = ["prestacion", "observacion"]
-        widgets = {
-            "prestacion": forms.Select(attrs={"class": "form-select"}),
-            "observacion": forms.Textarea(attrs={
-                "class": "form-control",
-                "rows": 4,
-                "placeholder": "Observación (opcional)"
-            }),
-        }
-
-
 class AgendaEventoForm(forms.ModelForm):
     class Meta:
         model = agendaevento
@@ -510,7 +498,7 @@ class ReservaSlotForm(forms.Form):
         coerce=int,
         empty_value="",
         choices=(),
-        widget=forms.RadioSelect,
+        widget=forms.RadioSelect(attrs={"class": "form-check-input"}),
     )
 
     def __init__(self, *args, **kwargs):
@@ -564,6 +552,12 @@ class PromocionForm(forms.ModelForm):
 
 
 class VeterinariaForm(forms.ModelForm):
+    smtp_password = forms.CharField(
+        required=False,
+        widget=forms.PasswordInput(render_value=False),
+        help_text="Déjelo vacío para conservar la contraseña SMTP actual.",
+    )
+
     class Meta:
         model = veterinaria
         fields = [
@@ -581,10 +575,134 @@ class VeterinariaForm(forms.ModelForm):
             "smtp_usa_tls": "Usa TLS",
             "smtp_usa_ssl": "Usa SSL",
         }
-        widgets = {
-            "smtp_password": forms.PasswordInput(render_value=True),
-        }
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self._stored_smtp_password = self.instance.smtp_password if self.instance and self.instance.pk else ""
         apply_bootstrap(self)
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if cleaned_data.get("smtp_usa_tls") and cleaned_data.get("smtp_usa_ssl"):
+            self.add_error(None, "SMTP no puede usar TLS y SSL simultáneamente.")
+        return cleaned_data
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        if not self.cleaned_data.get("smtp_password"):
+            instance.smtp_password = self._stored_smtp_password
+        if commit:
+            instance.save()
+            self.save_m2m()
+        return instance
+
+
+class UsuarioCreateForm(forms.ModelForm):
+    """Alta de un usuario sin exponer campos de privilegio de Django."""
+
+    password1 = forms.CharField(label="Contraseña", widget=forms.PasswordInput(render_value=False))
+    password2 = forms.CharField(label="Confirmar contraseña", widget=forms.PasswordInput(render_value=False))
+    es_administrador = forms.BooleanField(label="Administrador de la veterinaria", required=False)
+
+    class Meta:
+        model = get_user_model()
+        fields = ["username", "first_name", "last_name", "email", "is_active"]
+        labels = {
+            "username": "Usuario",
+            "first_name": "Nombres",
+            "last_name": "Apellidos",
+            "email": "Correo electrónico",
+            "is_active": "Cuenta activa",
+        }
+
+    def __init__(self, *args, puede_asignar_administrador=False, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not puede_asignar_administrador:
+            self.fields.pop("es_administrador")
+        apply_bootstrap(self)
+
+    def clean(self):
+        cleaned_data = super().clean()
+        password1 = cleaned_data.get("password1")
+        password2 = cleaned_data.get("password2")
+        if password1 and password2 and password1 != password2:
+            self.add_error("password2", "Las contraseñas no coinciden.")
+        return cleaned_data
+
+    def _post_clean(self):
+        super()._post_clean()
+        password = self.cleaned_data.get("password1")
+        if password and not self.errors.get("password2"):
+            try:
+                validate_password(password, self.instance)
+            except ValidationError as error:
+                self.add_error("password2", error)
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        instance.set_password(self.cleaned_data["password1"])
+        if commit:
+            instance.save()
+        return instance
+
+
+class UsuarioUpdateForm(forms.ModelForm):
+    """Edición segura: la contraseña y el rol solo cambian explícitamente."""
+
+    password1 = forms.CharField(
+        label="Nueva contraseña",
+        required=False,
+        widget=forms.PasswordInput(render_value=False),
+        help_text="Déjela vacía para conservar la contraseña actual.",
+    )
+    password2 = forms.CharField(
+        label="Confirmar nueva contraseña",
+        required=False,
+        widget=forms.PasswordInput(render_value=False),
+    )
+    es_administrador = forms.BooleanField(label="Administrador de la veterinaria", required=False)
+
+    class Meta:
+        model = get_user_model()
+        fields = ["username", "first_name", "last_name", "email", "is_active"]
+        labels = {
+            "username": "Usuario",
+            "first_name": "Nombres",
+            "last_name": "Apellidos",
+            "email": "Correo electrónico",
+            "is_active": "Cuenta activa",
+        }
+
+    def __init__(self, *args, puede_asignar_administrador=False, **kwargs):
+        super().__init__(*args, **kwargs)
+        if puede_asignar_administrador:
+            self.fields["es_administrador"].initial = self.instance.groups.filter(name="Administrador").exists()
+        else:
+            self.fields.pop("es_administrador")
+        apply_bootstrap(self)
+
+    def clean(self):
+        cleaned_data = super().clean()
+        password1 = cleaned_data.get("password1")
+        password2 = cleaned_data.get("password2")
+        if bool(password1) != bool(password2):
+            self.add_error("password2", "Ingrese y confirme la nueva contraseña.")
+        elif password1 != password2:
+            self.add_error("password2", "Las contraseñas no coinciden.")
+        return cleaned_data
+
+    def _post_clean(self):
+        super()._post_clean()
+        password = self.cleaned_data.get("password1")
+        if password and not self.errors.get("password2"):
+            try:
+                validate_password(password, self.instance)
+            except ValidationError as error:
+                self.add_error("password2", error)
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        if self.cleaned_data.get("password1"):
+            instance.set_password(self.cleaned_data["password1"])
+        if commit:
+            instance.save()
+        return instance

@@ -5,6 +5,7 @@ from django.core.management import call_command
 from django.core.exceptions import ValidationError
 from django.core import mail
 from django.contrib.auth.models import Group
+from django.db import IntegrityError, connection, transaction
 from django.test import override_settings
 from django.test import TestCase
 from django.urls import reverse
@@ -33,6 +34,7 @@ from .models import (
     veterinaria,
 )
 from .utils.rut import rut_dv
+from .forms import AtencionDetalleForm, MascotaForm, VeterinariaForm
 
 
 RESERVA_PUBLICA_SESSION_PREFIX = "reserva_publica"
@@ -302,6 +304,24 @@ class ProductionSeedCommandTests(TestCase):
 
 
 class ReservaPublicaFlowTests(ReservaBaseMixin, TestCase):
+    @override_settings(RATELIMIT_ENABLE=True)
+    def test_acceso_publico_limita_intentos_por_ip(self):
+        url = reverse("reserva_publica_acceso", args=[self.veterinaria.reserva_publica_token])
+        request_kwargs = {"REMOTE_ADDR": "198.51.100.77"}
+
+        for _ in range(10):
+            response = self.client.post(url, {
+                "rut": self.cliente.rut,
+                "email": self.cliente.email,
+            }, **request_kwargs)
+            self.assertEqual(response.status_code, 302)
+
+        response = self.client.post(url, {
+            "rut": self.cliente.rut,
+            "email": self.cliente.email,
+        }, **request_kwargs)
+        self.assertEqual(response.status_code, 403)
+
     def test_formulario_publico_renderiza_descripcion_del_evento_en_select(self):
         self.evento.descripcion = "Ayuno requerido antes del examen"
         self.evento.save(update_fields=["descripcion"])
@@ -323,16 +343,14 @@ class ReservaPublicaFlowTests(ReservaBaseMixin, TestCase):
             self.cliente.id,
         )
 
-    def test_acceso_publico_rechaza_email_incorrecto(self):
+    def test_acceso_publico_rechaza_email_incorrecto_sin_modificar_cliente(self):
         response = self.validar_cliente_publico(email="otro@example.com")
 
-        self.assertRedirects(response, reverse("reserva_publica_nueva", args=[self.veterinaria.reserva_publica_token]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "No fue posible validar los datos de acceso.")
         self.cliente.refresh_from_db()
-        self.assertEqual(self.cliente.email, "otro@example.com")
-        self.assertEqual(
-            self.client.session.get(self.reserva_publica_session_key(RESERVA_PUBLICA_CLIENTE_SUFFIX)),
-            self.cliente.id,
-        )
+        self.assertEqual(self.cliente.email, "ana@example.com")
+        self.assertIsNone(self.client.session.get(self.reserva_publica_session_key(RESERVA_PUBLICA_CLIENTE_SUFFIX)))
 
     def test_acceso_publico_muestra_registro_si_rut_no_existe(self):
         response = self.client.post(reverse("reserva_publica_acceso", args=[self.veterinaria.reserva_publica_token]), {
@@ -378,7 +396,7 @@ class ReservaPublicaFlowTests(ReservaBaseMixin, TestCase):
             nuevo_cliente.id,
         )
 
-    def test_registro_publico_redirige_a_existente_si_rut_ya_existe(self):
+    def test_registro_publico_rechaza_contexto_para_rut_existente(self):
         session = self.client.session
         session[self.reserva_publica_session_key(RESERVA_PUBLICA_REGISTRO_SUFFIX)] = {"rut": self.cliente.rut, "email": "actualizado@example.com"}
         session.save()
@@ -394,9 +412,9 @@ class ReservaPublicaFlowTests(ReservaBaseMixin, TestCase):
             "fechanac": "",
         })
 
-        self.assertRedirects(response, reverse("reserva_publica_nueva", args=[self.veterinaria.reserva_publica_token]))
+        self.assertRedirects(response, reverse("reserva_publica_acceso", args=[self.veterinaria.reserva_publica_token]))
         self.cliente.refresh_from_db()
-        self.assertEqual(self.cliente.email, "actualizado@example.com")
+        self.assertEqual(self.cliente.email, "ana@example.com")
         self.assertEqual(mascota.objects.filter(cliente=self.cliente).count(), 1)
 
     def test_registro_publico_sin_contexto_redirige_a_acceso(self):
@@ -534,6 +552,12 @@ class ReservaPublicaFlowTests(ReservaBaseMixin, TestCase):
 
 
 class DisponibilidadReservaTests(ReservaBaseMixin, TestCase):
+    def test_obtener_slots_disponibles_usa_tres_consultas(self):
+        with self.assertNumQueries(3):
+            slots = obtener_slots_disponibles(self.evento, self.manana)
+
+        self.assertEqual(slots, [self.horario])
+
     def test_horario_permite_mismo_slot_en_eventos_distintos(self):
         otro_evento = agendaevento.objects.create(nombre="Vacunacion", veterinaria=self.veterinaria)
 
@@ -988,6 +1012,7 @@ class PromocionTests(ReservaBaseMixin, TestCase):
             password="secret123",
         )
         cls.admin_user.groups.add(cls.grupo_admin)
+        cls.user.groups.add(cls.grupo_admin)
         cls.admin_user.veterinaria_profile.default_veterinaria = cls.veterinaria
         cls.admin_user.veterinaria_profile.save(update_fields=["default_veterinaria"])
         cls.especie_promo = especie.objects.create(nombre="Canino Promo", veterinaria=cls.veterinaria)
@@ -1052,7 +1077,8 @@ class PromocionTests(ReservaBaseMixin, TestCase):
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(mail.outbox[0].subject, "Promo peluqueria")
         self.assertEqual(mail.outbox[0].from_email, "contacto@vetnex.cl")
-        self.assertIn(self.cliente_promo.email, mail.outbox[0].to)
+        self.assertEqual(mail.outbox[0].to, [self.veterinaria.correo])
+        self.assertIn(self.cliente_promo.email, mail.outbox[0].bcc)
 
     def test_envia_correo_prueba_promocion(self):
         obj = promocion.objects.create(
@@ -1069,10 +1095,28 @@ class PromocionTests(ReservaBaseMixin, TestCase):
         self.veterinaria.refresh_from_db()
         self.assertRedirects(response, reverse("promocion_list"))
         self.assertEqual(len(mail.outbox), 1)
-        self.assertEqual(mail.outbox[0].to, ["prueba@example.com"])
+        self.assertEqual(mail.outbox[0].to, [self.veterinaria.correo])
+        self.assertEqual(mail.outbox[0].bcc, ["prueba@example.com"])
         self.assertEqual(self.veterinaria.correo_prueba, "prueba@example.com")
 
+    def test_no_envia_prueba_a_correo_invalido(self):
+        obj = promocion.objects.create(
+            veterinaria=self.veterinaria,
+            titulo="Promo inválida",
+            descripcion="",
+            texto_correo="Correo de prueba",
+        )
+
+        response = self.client.post(reverse("promocion_enviar_prueba", args=[obj.id]), {
+            "correo_prueba": "no-es-un-correo",
+        })
+
+        self.assertRedirects(response, reverse("promocion_list"))
+        self.assertEqual(len(mail.outbox), 0)
+
     def test_usuario_normal_no_accede_a_veterinaria(self):
+        user = get_user_model().objects.create_user(username="tester_sin_rol", password="secret123")
+        self.client.force_login(user)
         response = self.client.get(reverse("veterinaria_update", args=[self.veterinaria.id]))
 
         self.assertEqual(response.status_code, 403)
@@ -1184,3 +1228,173 @@ class TenantIsolationTests(ReservaBaseMixin, TestCase):
 
         self.assertRedirects(response, reverse("veterinaria_list"))
         self.assertFalse(veterinaria.objects.filter(id=self.otra_veterinaria.id).exists())
+
+
+class TenantIntegrityAndSecretTests(ReservaBaseMixin, TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.otra_veterinaria = veterinaria.objects.create(
+            nombre="OtraVet Integridad",
+            correo="otra-integridad@vet.local",
+            smtp_host="smtp.otra.local",
+            smtp_password="secreto-inicial",
+        )
+        cls.otra_especie = especie.objects.create(nombre="Felino Integridad", veterinaria=cls.otra_veterinaria)
+        cls.otra_raza = raza.objects.create(nombre="Angora Integridad", especie=cls.otra_especie)
+        cls.prestacion_otra = prestacion.objects.create(nombre="Prestación ajena", veterinaria=cls.otra_veterinaria)
+
+    def test_formulario_mascota_y_modelo_bloquean_raza_de_otro_tenant(self):
+        form = MascotaForm(veterinaria=self.veterinaria)
+        self.assertNotIn(self.otra_raza, form.fields["raza"].queryset)
+
+        pet = mascota(cliente=self.cliente, raza=self.otra_raza, nombre="Cruce inválido")
+        with self.assertRaises(ValidationError):
+            pet.full_clean()
+
+    def test_formulario_detalle_filtra_prestaciones_y_acepta_veterinaria(self):
+        detalle_form = AtencionDetalleForm(veterinaria=self.veterinaria)
+        self.assertNotIn(self.prestacion_otra, detalle_form.fields["prestacion"].queryset)
+
+    def test_smtp_password_se_cifra_en_base_y_no_se_rellena_en_formulario(self):
+        self.otra_veterinaria.refresh_from_db()
+        self.assertEqual(self.otra_veterinaria.smtp_password, "secreto-inicial")
+
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT smtp_password FROM veterinaria WHERE id = %s", [self.otra_veterinaria.id])
+            stored_value = cursor.fetchone()[0]
+
+        self.assertNotEqual(stored_value, "secreto-inicial")
+        self.assertTrue(stored_value.startswith("gAAAA"))
+        self.assertNotIn("secreto-inicial", VeterinariaForm(instance=self.otra_veterinaria).as_p())
+
+    def test_base_de_datos_impide_reserva_activa_duplicada(self):
+        reserva.objects.create(
+            veterinaria=self.veterinaria,
+            mascota=self.mascota,
+            evento=self.evento,
+            fecha=self.manana,
+            hora_inicio=self.horario.hora_inicio,
+            hora_fin=self.horario.hora_fin,
+            email_contacto=self.cliente.email,
+        )
+
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                reserva.objects.create(
+                    veterinaria=self.veterinaria,
+                    mascota=self.mascota,
+                    evento=self.evento,
+                    fecha=self.manana,
+                    hora_inicio=self.horario.hora_inicio,
+                    hora_fin=self.horario.hora_fin,
+                    email_contacto=self.cliente.email,
+                )
+
+    def test_usuario_sin_rol_administrador_no_puede_eliminar_cliente(self):
+        user = get_user_model().objects.create_user(username="usuario_sin_permiso", password="secret123")
+        self.client.force_login(user)
+
+        response = self.client.post(reverse("cliente_delete", args=[self.cliente.id]))
+
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(cliente.objects.filter(pk=self.cliente.id).exists())
+
+
+class GestionUsuariosTenantTests(ReservaBaseMixin, TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.otra_veterinaria = veterinaria.objects.create(
+            nombre="OtraVet Usuarios",
+            correo="usuarios@otra.local",
+        )
+        cls.grupo_admin, _ = Group.objects.get_or_create(name="Administrador")
+        cls.admin_local = get_user_model().objects.create_user(
+            username="admin_local_usuarios",
+            password="secret123",
+        )
+        cls.admin_local.groups.add(cls.grupo_admin)
+        cls.admin_local.veterinaria_profile.default_veterinaria = cls.veterinaria
+        cls.admin_local.veterinaria_profile.save(update_fields=["default_veterinaria"])
+        cls.admin_ajeno = get_user_model().objects.create_user(
+            username="admin_ajeno_usuarios",
+            password="secret123",
+        )
+        cls.admin_ajeno.groups.add(cls.grupo_admin)
+        cls.admin_ajeno.veterinaria_profile.default_veterinaria = cls.otra_veterinaria
+        cls.admin_ajeno.veterinaria_profile.save(update_fields=["default_veterinaria"])
+        cls.usuario_ajeno = get_user_model().objects.create_user(
+            username="usuario_ajeno_usuarios",
+            password="secret123",
+        )
+        cls.usuario_ajeno.veterinaria_profile.default_veterinaria = cls.otra_veterinaria
+        cls.usuario_ajeno.veterinaria_profile.save(update_fields=["default_veterinaria"])
+        cls.superuser = get_user_model().objects.create_superuser(
+            username="super_usuarios",
+            email="super-usuarios@example.com",
+            password="secret123",
+        )
+
+    def test_administrador_crea_usuario_exclusivo_sin_poder_otorgar_rol(self):
+        self.client.force_login(self.admin_local)
+
+        response = self.client.post(reverse("usuario_create"), {
+            "username": "asistente_vet",
+            "first_name": "Asistente",
+            "last_name": "Local",
+            "email": "asistente@example.com",
+            "is_active": "on",
+            "password1": "Clave-segura-123",
+            "password2": "Clave-segura-123",
+            "es_administrador": "on",  # intento manipulado: el campo no existe para el administrador local
+            "default_veterinaria": self.otra_veterinaria.id,
+        })
+
+        self.assertRedirects(response, reverse("usuario_list"))
+        creado = get_user_model().objects.get(username="asistente_vet")
+        self.assertEqual(creado.veterinaria_profile.default_veterinaria_id, self.veterinaria.id)
+        self.assertFalse(creado.groups.filter(name="Administrador").exists())
+        self.assertTrue(creado.check_password("Clave-segura-123"))
+
+    def test_administrador_no_ve_ni_edita_usuarios_de_otra_veterinaria_o_administradores(self):
+        self.client.force_login(self.admin_local)
+
+        listado = self.client.get(reverse("usuario_list"))
+        self.assertEqual(listado.status_code, 200)
+        self.assertNotContains(listado, self.admin_local.username)
+        self.assertNotContains(listado, self.usuario_ajeno.username)
+
+        response = self.client.get(reverse("usuario_update", args=[self.usuario_ajeno.id]))
+        self.assertEqual(response.status_code, 404)
+
+    def test_superusuario_crea_administrador_en_la_veterinaria_activa(self):
+        self.client.force_login(self.superuser)
+        self.client.post(reverse("veterinaria_set_active"), {
+            "veterinaria_id": self.otra_veterinaria.id,
+            "next": reverse("usuario_list"),
+        })
+
+        response = self.client.post(reverse("usuario_create"), {
+            "username": "admin_otra_nuevo",
+            "first_name": "Admin",
+            "last_name": "Otra",
+            "email": "admin-nuevo@otra.local",
+            "is_active": "on",
+            "password1": "Clave-segura-123",
+            "password2": "Clave-segura-123",
+            "es_administrador": "on",
+        })
+
+        self.assertRedirects(response, reverse("usuario_list"))
+        creado = get_user_model().objects.get(username="admin_otra_nuevo")
+        self.assertEqual(creado.veterinaria_profile.default_veterinaria_id, self.otra_veterinaria.id)
+        self.assertTrue(creado.groups.filter(name="Administrador").exists())
+
+    def test_usuario_sin_rol_no_accede_a_gestion_de_usuarios(self):
+        usuario = get_user_model().objects.create_user(username="sin_rol_usuarios", password="secret123")
+        usuario.veterinaria_profile.default_veterinaria = self.veterinaria
+        usuario.veterinaria_profile.save(update_fields=["default_veterinaria"])
+        self.client.force_login(usuario)
+
+        self.assertEqual(self.client.get(reverse("usuario_list")).status_code, 403)

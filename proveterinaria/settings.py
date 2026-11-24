@@ -12,9 +12,13 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 import os
 import sys
+import base64
+import hashlib
 from pathlib import Path
 from dotenv import load_dotenv
 import dj_database_url
+from django.core.exceptions import ImproperlyConfigured
+from cryptography.fernet import Fernet
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -39,9 +43,84 @@ MEDIA_ROOT = BASE_DIR / "media"
 #SECRET_KEY = 'django-insecure-3pkfjs@r*&ez=6^0wl3f8(*8)&l2-8#d3xap%paw#@vvne340n'
 #ALLOWED_HOSTS = []
 
-SECRET_KEY =  os.getenv("DJANGO_SECRET_KEY", "insecure-default")
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "")
 DEBUG = os.getenv("DJANGO_DEBUG", "0") == "1"
 ALLOWED_HOSTS = [h.strip() for h in os.getenv("DJANGO_ALLOWED_HOSTS", "").split(",") if h.strip()]
+
+IS_TESTING = "test" in sys.argv
+
+if not SECRET_KEY or SECRET_KEY.startswith("django-insecure-"):
+    raise ImproperlyConfigured(
+        "DJANGO_SECRET_KEY debe configurarse con un secreto seguro; no se permiten valores por defecto."
+    )
+
+if not DEBUG and not IS_TESTING and not ALLOWED_HOSTS:
+    raise ImproperlyConfigured(
+        "DJANGO_ALLOWED_HOSTS debe configurarse cuando DEBUG=False."
+    )
+
+if IS_TESTING:
+    ALLOWED_HOSTS = ["testserver", *ALLOWED_HOSTS]
+
+# Defaults seguros para un despliegue HTTPS. Se desactivan solo en desarrollo o pruebas.
+SECURE_SSL_REDIRECT = not DEBUG and not IS_TESTING
+SESSION_COOKIE_SECURE = not DEBUG and not IS_TESTING
+CSRF_COOKIE_SECURE = not DEBUG and not IS_TESTING
+SECURE_HSTS_SECONDS = 31536000 if not DEBUG and not IS_TESTING else 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG and not IS_TESTING
+SECURE_HSTS_PRELOAD = not DEBUG and not IS_TESTING
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = "same-origin"
+
+if os.getenv("DJANGO_BEHIND_PROXY", "0") == "1":
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+SMTP_CREDENTIAL_ENCRYPTION_KEY = os.getenv("SMTP_CREDENTIAL_ENCRYPTION_KEY", "")
+if not SMTP_CREDENTIAL_ENCRYPTION_KEY:
+    if not DEBUG and not IS_TESTING:
+        raise ImproperlyConfigured(
+            "SMTP_CREDENTIAL_ENCRYPTION_KEY debe configurarse para cifrar credenciales SMTP en producción."
+        )
+    SMTP_CREDENTIAL_ENCRYPTION_KEY = base64.urlsafe_b64encode(
+        hashlib.sha256(SECRET_KEY.encode("utf-8")).digest()
+    ).decode("ascii")
+
+try:
+    Fernet(SMTP_CREDENTIAL_ENCRYPTION_KEY.encode("ascii"))
+except (TypeError, ValueError) as exc:
+    raise ImproperlyConfigured("SMTP_CREDENTIAL_ENCRYPTION_KEY debe ser una clave Fernet válida.") from exc
+
+REDIS_URL = os.getenv("REDIS_URL", "")
+if not REDIS_URL and DEBUG and not IS_TESTING:
+    REDIS_URL = "redis://127.0.0.1:6379/0"
+if not REDIS_URL and not IS_TESTING:
+    raise ImproperlyConfigured("REDIS_URL debe configurarse fuera de pruebas.")
+
+if IS_TESTING:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "app-multivet-tests",
+        }
+    }
+    CELERY_TASK_ALWAYS_EAGER = True
+    CELERY_TASK_EAGER_PROPAGATES = True
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django_redis.cache.RedisCache",
+            "LOCATION": REDIS_URL,
+            "OPTIONS": {"CLIENT_CLASS": "django_redis.client.DefaultClient"},
+            "KEY_PREFIX": "multivet",
+        }
+    }
+    CELERY_BROKER_URL = REDIS_URL
+    CELERY_RESULT_BACKEND = REDIS_URL
+    CELERY_TASK_TRACK_STARTED = True
+    CELERY_TASK_TIME_LIMIT = 120
+
+RATELIMIT_USE_CACHE = "default"
+RATELIMIT_ENABLE = not IS_TESTING
 
 LOGIN_URL = "/login/"
 LOGIN_REDIRECT_URL = "dashboard_panel"

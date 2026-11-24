@@ -8,6 +8,8 @@ from django.db import models
 from django.db.models import Q
 from django.utils import timezone
 
+from .fields import EncryptedCharField
+
 # Create your models here.
 class Sexo(models.TextChoices):
     MASCULINO = "M", "Macho"
@@ -76,19 +78,49 @@ def obtener_slots_disponibles(evento_obj, fecha):
     if not evento_obj or not fecha or not evento_obj.activo:
         return []
 
-    veterinaria = getattr(evento_obj, "veterinaria", None)
-
-    horarios = (
+    veterinaria_id = evento_obj.veterinaria_id
+    horarios = list(
         agendaeventohorario.objects
-        .filter(evento=evento_obj, veterinaria=veterinaria, dia_semana=fecha.weekday(), activo=True)
+        .filter(
+            evento_id=evento_obj.id,
+            veterinaria_id=veterinaria_id,
+            dia_semana=fecha.weekday(),
+            activo=True,
+        )
         .order_by("hora_inicio", "hora_fin")
+    )
+
+    if not horarios:
+        return []
+
+    bloqueos = list(
+        agendabloqueo.objects
+        .filter(
+            veterinaria_id=veterinaria_id,
+            activo=True,
+            fecha_inicio__lte=fecha,
+            fecha_fin__gte=fecha,
+        )
+        .values_list("hora_inicio", "hora_fin")
+    )
+    reservas_activas = list(
+        reserva.objects
+        .filter(veterinaria_id=veterinaria_id, evento_id=evento_obj.id, fecha=fecha)
+        .exclude(estado=EstadoReserva.CANCELADA)
+        .values_list("hora_inicio", "hora_fin")
     )
 
     disponibles = []
     for horario in horarios:
-        if slot_esta_bloqueado(fecha, horario.hora_inicio, horario.hora_fin, veterinaria=veterinaria):
+        if any(
+            inicio is None or horarios_se_solapan(inicio, fin, horario.hora_inicio, horario.hora_fin)
+            for inicio, fin in bloqueos
+        ):
             continue
-        if reservas_en_conflicto(fecha, horario.hora_inicio, horario.hora_fin, evento=evento_obj, veterinaria=veterinaria).exists():
+        if any(
+            horarios_se_solapan(inicio, fin, horario.hora_inicio, horario.hora_fin)
+            for inicio, fin in reservas_activas
+        ):
             continue
         disponibles.append(horario)
 
@@ -191,6 +223,14 @@ class mascota(models.Model):
     class Meta:
         db_table = 'mascota'
 
+    def clean(self):
+        if (
+            self.cliente_id
+            and self.raza_id
+            and self.cliente.veterinaria_id != self.raza.especie.veterinaria_id
+        ):
+            raise ValidationError({"raza": "La raza debe pertenecer a la veterinaria del cliente."})
+
     def __str__(self):
         return f"{self.cliente} {self.raza} {self.nombre} {self.sexo}"
 
@@ -203,6 +243,9 @@ class atencion(models.Model):
 
     class Meta:
         db_table = 'atencion'
+        indexes = [
+            models.Index(fields=["veterinaria", "fechaatencion"], name="idx_atencion_vet_fecha"),
+        ]
 
     def __str__(self):
         return f"{self.mascota} {self.fechaatencion}"
@@ -259,6 +302,17 @@ class atenciondetalle(models.Model):
 
     class Meta:
         db_table = 'atenciondetalle'
+        indexes = [
+            models.Index(fields=["created_at"], name="idx_detalle_created_at"),
+        ]
+
+    def clean(self):
+        if (
+            self.atencion_id
+            and self.prestacion_id
+            and self.atencion.veterinaria_id != self.prestacion.veterinaria_id
+        ):
+            raise ValidationError({"prestacion": "La prestación debe pertenecer a la veterinaria de la atención."})
 
     def __str__(self):
         return f"{self.atencion} {self.prestacion}"
@@ -274,6 +328,9 @@ class cita(models.Model):
 
     class Meta:
         db_table = 'cita'
+        indexes = [
+            models.Index(fields=["veterinaria", "estado", "fecha"], name="idx_cita_vet_estado_fecha"),
+        ]
 
     def __str__(self):
         return f"{self.mascota} {self.fecha} {self.control} {self.observacion} {self.estado}"
@@ -414,6 +471,13 @@ class reserva(models.Model):
     class Meta:
         db_table = "reserva"
         ordering = ["fecha", "hora_inicio", "mascota__nombre"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["veterinaria", "evento", "fecha", "hora_inicio", "hora_fin"],
+                condition=~Q(estado=EstadoReserva.CANCELADA),
+                name="uq_reserva_slot_activo",
+            ),
+        ]
 
     def clean(self):
         errores = {}
@@ -474,7 +538,7 @@ class veterinaria(models.Model):
     smtp_host = models.CharField(max_length=150, blank=True)
     smtp_port = models.PositiveIntegerField(default=587)
     smtp_usuario = models.CharField(max_length=150, blank=True)
-    smtp_password = models.CharField(max_length=150, blank=True)
+    smtp_password = EncryptedCharField(max_length=500, blank=True)
     smtp_usa_tls = models.BooleanField(default=True)
     smtp_usa_ssl = models.BooleanField(default=False)
 

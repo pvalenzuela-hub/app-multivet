@@ -28,6 +28,7 @@ from .views import (
     promocion_list, promocion_create, promocion_update, promocion_detail,
     promocion_delete, promocion_enviar_correo, promocion_enviar_prueba, veterinaria_update,
     veterinaria_list, veterinaria_create, veterinaria_delete, veterinaria_set_active,
+    usuario_list, usuario_create, usuario_update,
 )
 
 urlpatterns = [
@@ -147,6 +148,9 @@ urlpatterns = [
     path("veterinarias/<int:pk>/editar/", veterinaria_update, name="veterinaria_update"),
     path("veterinarias/<int:pk>/eliminar/", veterinaria_delete, name="veterinaria_delete"),
     path("veterinarias/activa/", veterinaria_set_active, name="veterinaria_set_active"),
+    path("usuarios/", usuario_list, name="usuario_list"),
+    path("usuarios/nuevo/", usuario_create, name="usuario_create"),
+    path("usuarios/<int:pk>/editar/", usuario_update, name="usuario_update"),
 
     path("panel/", dashboard_panel, name="dashboard_panel"),
 

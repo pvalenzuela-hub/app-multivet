@@ -59,7 +59,16 @@
     {% if slots %}
       <fieldset>
         <legend class="fs-6 mb-3">Seleccione un horario</legend>
-        {{ form.horario_id }}
+        <div class="vstack gap-2">
+          {% for radio in form.horario_id %}
+            <div class="slot-option">
+              <label for="{{ radio.id_for_label }}">
+                {{ radio.tag }}
+                <span class="fw-semibold">{{ radio.choice_label }}</span>
+              </label>
+            </div>
+          {% endfor %}
+        </div>
         {% if form.horario_id.errors %}<div class="text-danger small mt-2">{{ form.horario_id.errors }}</div>{% endif %}
       </fieldset>
     {% else %}

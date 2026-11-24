@@ -16,7 +16,17 @@
 <form method="post" class="card shadow-sm">
   {% csrf_token %}
   <div class="card-body">
-    {{ form.as_p }}
+    {{ form.non_field_errors }}
+    <div class="row g-3">
+      {% for field in form %}
+        <div class="{% if field.name == 'observacion' %}col-12{% else %}col-md-6{% endif %}">
+          <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+          {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+          {% if field.errors %}<div class="text-danger small">{{ field.errors }}</div>{% endif %}
+        </div>
+      {% endfor %}
+    </div>
   </div>
   <div class="card-footer bg-white d-flex justify-content-end gap-2">
     <a class="btn btn-outline-secondary" href="{% url 'citas_pendientes_filtrado' %}">Cancelar</a>
